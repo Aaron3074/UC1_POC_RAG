@@ -1,0 +1,135 @@
+DOCUMENT: Release Management and Change Register
+SOURCE_FORMAT: Excel Workbook (release_change_register_2025.xlsx)
+TOPIC: Release Management, Change Register, Deployment, Versioning, Rollback, CAB
+VERSION: 4.0
+LAST UPDATED: 2025-04-20
+OWNER: Release Management Team
+REVIEW_CYCLE: Per release
+
+===========================
+SHEET 1 — RELEASE CALENDAR (2025)
+===========================
+
+RELEASE POLICY:
+  Production releases: Tuesdays and Thursdays only (change window: 22:00–02:00)
+  Emergency hotfixes: Any time with CTO + Security lead approval
+  December Freeze: No production releases December 1–31 (implemented post-INC-2024-1201)
+  Pre-release checklist: Code review, automated tests (>85% coverage), staging sign-off, CAB approval
+
+| Release ID  | Date       | Application    | Version  | Type        | Deployer           | CAB Ref      | Status    | Rollback Available |
+|-------------|------------|----------------|----------|-------------|--------------------|--------------|-----------|--------------------|
+| REL-2025-001| 2025-01-09 | CBS            | v4.1.2   | Hotfix      | CBS Team           | CAB-2025-001 | SUCCESS   | Yes — v4.1.1       |
+| REL-2025-002| 2025-01-14 | PAYMENTS-GW    | v2.8.0   | Feature     | Payments Team      | CAB-2025-002 | SUCCESS   | Yes — v2.7.3       |
+| REL-2025-003| 2025-01-16 | FRAUD-ENGINE   | v3.2.1   | Model update| Risk Tech          | CAB-2025-003 | SUCCESS   | Yes — v3.2.0       |
+| REL-2025-004| 2025-01-23 | AUTH-SVC       | v1.5.0   | Feature     | Security Team      | CAB-2025-004 | SUCCESS   | Yes — v1.4.2       |
+| REL-2025-005| 2025-02-06 | REPORTING-SVC  | v1.9.0   | Feature     | BI Team            | CAB-2025-005 | SUCCESS   | Yes — v1.8.3       |
+| REL-2025-006| 2025-02-13 | CBS            | v4.2.0   | Major       | CBS Team           | CAB-2025-006 | SUCCESS   | Yes — v4.1.2       |
+| REL-2025-007| 2025-02-20 | KAFKA          | v3.5.1   | Infra       | Platform Eng       | CAB-2025-007 | SUCCESS   | Yes — v3.4.0       |
+| REL-2025-008| 2025-03-06 | PAYMENTS-GW    | v2.8.1   | Bugfix      | Payments Team      | CAB-2025-008 | SUCCESS   | Yes — v2.8.0       |
+| REL-2025-009| 2025-03-13 | FRAUD-ENGINE   | v3.3.0   | Feature     | Risk Tech          | CAB-2025-009 | ROLLBACK  | Rolled back to v3.2.1|
+| REL-2025-010| 2025-03-20 | FRAUD-ENGINE   | v3.3.1   | Bugfix      | Risk Tech          | CAB-2025-010 | SUCCESS   | Yes — v3.2.1       |
+| REL-2025-011| 2025-04-03 | AUTH-SVC       | v1.5.1   | Bugfix      | Security Team      | CAB-2025-011 | SUCCESS   | Yes — v1.5.0       |
+| REL-2025-012| 2025-04-10 | SWIFT-ADAPTER  | v2.1.0   | Feature     | Payments Team      | CAB-2025-012 | SUCCESS   | Yes — v2.0.3       |
+
+===========================
+SHEET 2 — ROLLBACK DETAIL
+===========================
+
+ROLLBACK: REL-2025-009 — FRAUD-ENGINE v3.3.0
+  Date: 2025-03-13 22:00 deploy → 2025-03-14 00:47 rollback (2hr 47min)
+  Reason: v3.3.0 introduced a new feature flag mechanism that caused model scoring
+           to return NaN for transactions with NULL merchant_category_code.
+           PAYMENTS-GW_FRAUD_THRESHOLD comparison with NaN evaluates to False in Python —
+           meaning all transactions with NULL merchant codes bypassed fraud checks.
+  Detection: Risk Tech monitoring dashboard showed fraud score null rate spike to 12% at 23:15.
+             Risk analyst escalated at 23:41. Rollback decision at 00:30.
+  Impact: ~1,800 transactions processed without fraud scoring (merchant_category_code NULL).
+          All 1,800 transactions flagged for manual review. 3 confirmed fraudulent.
+          Financial exposure: $4,200 (recovered via chargeback).
+  Fix: v3.3.1 deployed 2025-03-20 with NULL-safe comparison and unit test coverage for NULL inputs.
+  Process improvement: Fraud scoring null rate added as automated deployment gate.
+                       If null rate >1% in first 15 min post-deploy, auto-rollback triggers.
+
+===========================
+SHEET 3 — RELEASE NOTES SUMMARY
+===========================
+
+REL-2025-002 — PAYMENTS-GW v2.8.0 (Feature Release)
+  New features:
+    - PAYMENTS-GW_MAX_PAYLOAD_SIZE_MB configurable at runtime (previously required restart)
+    - Payment retry logic refactored: exponential backoff replaces fixed 30s retry
+    - New /payments/metrics Prometheus endpoint for Datadog scraping
+  Bug fixes:
+    - Fixed race condition where concurrent retries could duplicate transactions (rare edge case)
+    - SWIFT_TIMEOUT_SEC now correctly applied per-transaction (was global previously)
+  Config changes: None required. Backward compatible.
+  Rollback procedure: systemctl stop payments-gw; deploy v2.7.3 package; systemctl start payments-gw
+
+REL-2025-006 — CBS v4.2.0 (Major Release)
+  New features:
+    - Beneficiary account type field added to transaction schema (column: beneficiary_account_type)
+      NOTE: Data Engineering notified per new schema change process (lessons from INC-2024-0892)
+    - Bulk payment processing API endpoint (up to 500 transactions per request)
+    - Enhanced audit logging for high-value transactions (>$100,000)
+  Performance improvements:
+    - CBS_DB_POOL_SIZE default changed from 50 to 100 (permanent fix from INC-2024-1201)
+    - Oracle query optimisation for account balance lookups (23% latency improvement)
+  Config changes:
+    - CBS_DB_POOL_SIZE: 50 → 100 (DBA approved, already pre-deployed as hotfix REL-2025-001)
+  Data Engineering sign-off: CONFIRMED (schema change notification sent 2025-01-28)
+
+REL-2025-007 — Kafka v3.5.1 (Infrastructure Upgrade)
+  Purpose: Kafka version upgrade from 3.4.0 to 3.5.1
+  Key changes:
+    - Performance improvements in log segment management (addresses INC-2025-0044)
+    - Improved consumer group rebalance algorithm (reduces rebalance time by ~40%)
+    - KRaft mode still not enabled (Zookeeper still in use — see ADR-008)
+  Downtime: Zero downtime achieved via rolling upgrade (one broker at a time)
+  Testing: Full consumer lag and throughput test in staging confirmed no regression
+
+REL-2025-012 — SWIFT-ADAPTER v2.1.0 (Feature Release)
+  New features:
+    - SWIFT ISO 20022 message format support (MT → MX migration readiness)
+    - Compliance filter updated to OFAC list as of Q1 2025
+    - SWIFT_MAX_TRANSFER_LIMIT_USD now configurable per currency pair
+  Note: ISO 20022 support is passive — MX format not yet live. Active from Q3 2025.
+
+===========================
+SHEET 4 — UPCOMING RELEASES (PIPELINE)
+===========================
+
+| Target Date | Application    | Version  | Type    | Description                              | CAB Status  |
+|-------------|----------------|----------|---------|------------------------------------------|-------------|
+| 2025-05-08  | FRAUD-ENGINE   | v3.4.0   | Feature | New ML model (v4.0.0) — quarterly cycle  | PENDING     |
+| 2025-05-15  | PAYMENTS-GW    | v2.9.0   | Feature | Load balancer support for horizontal scale| PENDING    |
+| 2025-05-22  | REPORTING-SVC  | v2.0.0   | Major   | New Basel III LCR report format          | PENDING     |
+| 2025-06-05  | AUTH-SVC       | v1.6.0   | Feature | Vault secrets integration (ADR-006 dep.) | NOT STARTED |
+| 2025-Q3     | KAFKA          | —        | Infra   | KRaft migration (ADR-008)                | PROPOSED    |
+
+===========================
+SHEET 5 — CAB PROCESS SUMMARY
+===========================
+
+Change Advisory Board (CAB) process (updated February 2025):
+
+STANDARD CHANGE (low risk):
+  Examples: Bug fixes, config changes with documented precedent
+  Approval: Application owner + one peer reviewer
+  Lead time: 2 business days
+  CAB meeting: Not required
+
+SIGNIFICANT CHANGE (medium risk):
+  Examples: Feature releases, infrastructure changes, new integrations
+  Approval: Application owner + Platform Engineering + CAB quorum (3 of 5 members)
+  Lead time: 5 business days
+  CAB meeting: Required
+
+EMERGENCY CHANGE (high urgency):
+  Examples: Security hotfix, active incident remediation
+  Approval: CTO + Security lead (verbal OK accepted, documented post-hoc)
+  Lead time: As needed
+  CAB meeting: Post-change review within 24 hours
+
+DECEMBER FREEZE EXCEPTION:
+  Only security patches and active incident remediation permitted December 1–31.
+  All other changes deferred to January. Exception requires CTO sign-off.
