@@ -1,0 +1,198 @@
+DOCUMENT: Major Incident Post-Mortem Reports
+SOURCE_FORMAT: PowerPoint Presentation (incident_postmortems_2024.pptx)
+TOPIC: Incident Reports, Root Cause Analysis, Post-Mortem, RCA, Lessons Learned
+VERSION: 1.4
+LAST UPDATED: 2025-01-20
+OWNER: Platform Engineering + Risk Team
+AUDIENCE: Engineering Leadership, Risk Committee, Operations
+
+===========================
+SLIDE 1 — TITLE
+===========================
+
+Major Incident Post-Mortems
+2024 Significant Events — Root Cause & Prevention
+Blameless. Structured. Action-Oriented.
+
+===========================
+SLIDE 2 — INCIDENT SUMMARY TABLE
+===========================
+
+| Incident ID   | Date          | Severity | Duration | Systems Affected                    | Root Cause Category      | Status  |
+|---------------|---------------|----------|----------|-------------------------------------|--------------------------|---------|
+| INC-2024-0341 | 2024-05-07    | SEV-2    | 47 min   | AUTH-SVC, All apps                  | Config error             | CLOSED  |
+| INC-2024-0892 | 2024-08-19    | SEV-2    | 82 min   | REPORTING-SVC, DWH                  | ETL schema mismatch      | CLOSED  |
+| INC-2024-1198 | 2024-12-14    | SEV-1    | 138 min  | FRAUD-ENGINE, PAYMENTS-GW, CBS      | Redis OOM (param change) | CLOSED  |
+| INC-2024-1201 | 2024-12-22    | SEV-1    | 39 min   | CBS, PAYMENTS-GW                    | DB pool exhaustion       | CLOSED  |
+| INC-2025-0044 | 2025-01-31    | SEV-3    | 18 min   | KAFKA-BROKER-2                      | Disk space (log segment) | CLOSED  |
+
+===========================
+SLIDE 3 — INC-2024-0341: AUTH-SVC Outage (All Apps Impacted)
+===========================
+
+INCIDENT: INC-2024-0341
+DATE: 2024-05-07 14:32 — 15:19 (47 minutes)
+SEVERITY: SEV-2 (all user-facing applications unavailable)
+CUSTOMER IMPACT: ~8,400 active sessions dropped. Customer portal unavailable 47 min.
+
+TIMELINE:
+  14:32 — Auth-SVC health check begins returning 503. Datadog alert fires.
+  14:35 — Security team acknowledges. Begins investigation.
+  14:41 — Root cause identified: PostgreSQL auth DB connection string changed during routine config update.
+           New password did not match DB credentials. Keycloak cannot connect to user store.
+  14:44 — All downstream apps begin rejecting user requests (JWT validation fails — AUTH-SVC unreachable).
+  14:55 — Config rolled back. PostgreSQL connection restored.
+  15:03 — AUTH-SVC returns healthy. Token refresh begins across apps.
+  15:19 — All sessions restored. Incident closed.
+
+ROOT CAUSE:
+  A junior engineer updated the AUTH-SVC environment configuration file manually
+  (not via the approved config management pipeline). The PostgreSQL password was
+  incorrectly copied with a trailing whitespace character. Keycloak silently failed
+  to connect to the DB on startup after a pod restart triggered by the config update.
+
+CONTRIBUTING FACTORS:
+  - No peer review required for config file changes below a certain risk threshold
+  - Keycloak does not immediately surface DB connection failure in health endpoint
+  - On-call engineer's runbook did not include config validation as first step
+
+ACTION ITEMS:
+  [DONE] All config changes now require peer review and push via CI/CD pipeline (manual edits blocked)
+  [DONE] Keycloak health check extended to include DB connectivity probe
+  [DONE] Runbook updated: AUTH-SVC troubleshooting now includes config validation step
+  [OPEN] Secrets management migration to Vault (planned Q3 2025 — ADR pending)
+
+LESSON LEARNED:
+  AUTH-SVC is the most critical single point of failure in the architecture.
+  Any outage here cascades immediately to 100% of applications.
+  Config changes to AUTH-SVC must have the highest change management rigor.
+
+===========================
+SLIDE 4 — INC-2024-0892: Reporting Failure (ETL Schema Mismatch)
+===========================
+
+INCIDENT: INC-2024-0892
+DATE: 2024-08-19 01:30 — 02:52 (82 minutes, overnight batch)
+SEVERITY: SEV-2 (regulatory reports not generated; manual intervention required)
+CUSTOMER IMPACT: Internal only. No customer-facing impact. Regulatory report delayed 4 hours.
+
+TIMELINE:
+  01:30 — ETL-001 (dag_cbs_to_dwh) starts as scheduled.
+  01:47 — ETL task fails at transformation step. Airflow logs show KeyError: 'beneficiary_account_type'.
+  01:47 — Airflow auto-retry triggers. Second attempt fails with same error.
+  01:52 — PagerDuty alert wakes Data Engineering on-call.
+  02:11 — Root cause confirmed: CBS team deployed v2.4.1 release at 23:00 which added new column
+           'beneficiary_account_type' to transaction table. ETL transformation code not updated.
+  02:24 — ETL transformation script patched to handle new column (mapped to NULL for existing records).
+  02:35 — ETL re-triggered manually. Completes successfully.
+  02:52 — DWH updated. RPT-001 triggered manually. Reports generated.
+  06:00 — Regulatory reports submitted (4 hours late; regulator notified and accepted delay).
+
+ROOT CAUSE:
+  CBS release v2.4.1 added a new database column without notifying the Data Engineering team.
+  There was no formal data schema change notification process between CBS team and ETL maintainers.
+
+CONTRIBUTING FACTORS:
+  - No cross-team schema change notification workflow existed
+  - ETL code had no schema validation pre-flight check before processing
+  - Release checklist did not include "notify downstream consumers of schema changes"
+
+ACTION ITEMS:
+  [DONE] Schema change notification added to CBS release checklist (mandatory sign-off from Data Eng)
+  [DONE] ETL pre-flight check added: validates source schema matches expected columns before processing
+  [DONE] Slack channel #schema-changes created for cross-team schema communication
+  [OPEN] Automated schema drift detection in ETL pipeline (Q2 2025)
+
+===========================
+SLIDE 5 — INC-2024-1198: Fraud Engine Collapse (Redis OOM)
+===========================
+
+INCIDENT: INC-2024-1198
+DATE: 2024-12-14 02:17 — 04:35 (138 minutes) — MOST SEVERE 2024
+SEVERITY: SEV-1 (payment processing halted for 2+ hours during night batch)
+CUSTOMER IMPACT: ~14,200 payment transactions delayed or failed. SWIFT transfers halted.
+                 Estimated revenue impact: ~$380,000 in delayed settlements.
+
+TIMELINE:
+  02:17 — Fraud Engine begins returning 503. Consumer lag on fraud.transaction.events spikes.
+  02:19 — PAYMENTS-GW detects Fraud Engine unavailable. Fails closed (blocks all payments).
+  02:21 — SEV-1 declared. Platform Engineering, Risk Tech, Payments teams paged.
+  02:34 — Redis memory usage confirmed at 100% (OOM). Fraud scoring process crashed.
+  02:41 — Root cause identified: FRAUD_REDIS_TTL_SEC changed from 3600 to 300 six days ago.
+           12x increase in Redis write frequency overwhelmed memory allocation limit.
+  02:55 — Redis instance flushed (cache cleared). Fraud Engine restarted.
+  03:08 — Fraud Engine operational. Payment processing resumes.
+  03:15 — Kafka consumer lag begins recovering (backlog of ~180,000 events).
+  04:35 — All backlogged transactions processed. Full recovery declared.
+
+ROOT CAUSE:
+  Risk Technology team reduced FRAUD_REDIS_TTL_SEC from 3600 to 300 to improve fraud
+  score freshness for a new model deployment. The change was made directly in the
+  production config file without a CAB request (team considered it a minor tuning change).
+  Impact analysis of the 12x cache write increase on Redis memory was not performed.
+
+5-WHYS ANALYSIS:
+  Why did Fraud Engine crash?        → Redis ran out of memory
+  Why did Redis run out of memory?   → Cache write frequency increased 12x
+  Why did frequency increase?        → FRAUD_REDIS_TTL_SEC reduced from 3600 to 300
+  Why was this change made?          → Risk Tech tuned for model freshness
+  Why without CAB approval?          → Change was categorised as "minor" (no impact analysis)
+  Root cause: Change management classification did not account for multiplicative resource impact.
+
+ACTION ITEMS:
+  [DONE] FRAUD_REDIS_TTL_SEC restored to 3600 with documented rationale
+  [DONE] Redis OOM alert added to Zabbix (threshold: 80% memory)
+  [DONE] Any change to FRAUD_REDIS_TTL_SEC now requires Platform Engineering co-approval
+  [DONE] Parameter change impact matrix created (documents resource impact of each param)
+  [OPEN] Redis memory auto-scaling evaluation (Q2 2025)
+  [OPEN] Fraud Engine fail-open policy review (should payments proceed with no fraud score?)
+
+===========================
+SLIDE 6 — INC-2024-1201: CBS DB Pool Exhaustion
+===========================
+
+INCIDENT: INC-2024-1201
+DATE: 2024-12-22 09:44 — 10:23 (39 minutes)
+SEVERITY: SEV-1 (core banking unavailable during peak business hours)
+CUSTOMER IMPACT: All customer transactions failed 09:44–10:23. Portal showed errors.
+                 Estimated 22,000 failed transaction attempts.
+
+ROOT CAUSE:
+  CBS_DB_POOL_SIZE = 50 was insufficient for December peak load.
+  Transaction volume 35% above baseline triggered pool starvation.
+  Each transaction holds a DB connection for ~600ms average.
+  At 500 TPS peak, connections required = 500 × 0.6 = 300 concurrent (6x the pool size).
+
+IMMEDIATE FIX: Pool size raised to 80 (emergency), then 100 (permanent, DBA approved).
+PERMANENT FIX: Connection pool monitoring, auto-alert at 80% utilisation.
+SYSTEMIC FIX: PAYMENTS-GW horizontal scaling planned (see Capacity Register Priority 1).
+
+===========================
+SLIDE 7 — CROSS-INCIDENT PATTERNS & RECOMMENDATIONS
+===========================
+
+PATTERN 1: December is the highest-risk month
+  Both SEV-1 incidents occurred in December during peak transaction load.
+  Recommendation: Implement a December Freeze — no non-critical changes in Dec 1-31.
+  Status: APPROVED by CTO. First freeze: December 2025.
+
+PATTERN 2: Parameter changes are a leading cause of incidents
+  INC-2024-1198 (Redis TTL), INC-2024-0341 (DB password) both caused by config changes.
+  Recommendation: All production parameter changes require CAB approval and impact analysis.
+  Status: IMPLEMENTED. CAB process updated February 2025.
+
+PATTERN 3: AUTH-SVC cascades are disproportionately damaging
+  Any AUTH-SVC degradation immediately impacts 100% of user-facing services.
+  Recommendation: Implement token caching at application level (grace period after AUTH-SVC down).
+  Status: PROPOSED. Architecture review Q2 2025.
+
+PATTERN 4: Schema changes without cross-team notification
+  INC-2024-0892 caused by CBS schema change without notifying ETL team.
+  Recommendation: Mandatory schema change notification in release checklist.
+  Status: IMPLEMENTED. #schema-changes channel active.
+
+OVERALL TREND:
+  Total SEV-1/2 incidents 2024: 5
+  Total downtime (SEV-1/2): 324 minutes
+  Target for 2025: <200 minutes total SEV-1/2 downtime
+  Key levers: December Freeze, CAB rigor, AUTH-SVC resilience, capacity headroom.
