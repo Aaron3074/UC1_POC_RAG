@@ -1,0 +1,99 @@
+DOCUMENT: System Capacity and Performance Register
+SOURCE_FORMAT: Excel Workbook (capacity_register_2025.xlsx)
+TOPIC: Capacity Planning, Performance Baselines, Resource Utilization, Thresholds
+VERSION: 5.1
+LAST UPDATED: 2025-04-01
+OWNER: Platform Engineering Team
+REVIEW_CYCLE: Quarterly
+
+===========================
+SHEET 1 — APPLICATION SERVER CAPACITY
+===========================
+
+| Application       | Host         | vCPUs | RAM (GB) | Disk (GB) | Avg CPU% | Peak CPU% | Avg RAM% | Peak RAM% | Status    |
+|-------------------|--------------|-------|----------|-----------|----------|-----------|----------|-----------|-----------|
+| CBS               | 10.10.1.10   | 16    | 64       | 500       | 34%      | 71%       | 52%      | 78%       | HEALTHY   |
+| PAYMENTS-GW       | 10.10.1.20   | 8     | 32       | 200       | 41%      | 88%       | 61%      | 90%       | WARNING   |
+| FRAUD-ENGINE      | 10.10.1.30   | 12    | 48       | 300       | 55%      | 94%       | 67%      | 85%       | WARNING   |
+| REPORTING-SVC     | 10.10.1.40   | 8     | 32       | 400       | 22%      | 65%       | 48%      | 72%       | HEALTHY   |
+| AUTH-SVC          | 10.10.1.50   | 4     | 16       | 100       | 18%      | 44%       | 35%      | 58%       | HEALTHY   |
+| SWIFT-ADAPTER     | 10.10.1.60   | 4     | 16       | 100       | 12%      | 31%       | 28%      | 41%       | HEALTHY   |
+| KAFKA-BROKER-1    | 10.10.1.70   | 8     | 32       | 2000      | 48%      | 76%       | 55%      | 71%       | HEALTHY   |
+| KAFKA-BROKER-2    | 10.10.1.71   | 8     | 32       | 2000      | 46%      | 73%       | 54%      | 70%       | HEALTHY   |
+| KAFKA-BROKER-3    | 10.10.1.72   | 8     | 32       | 2000      | 47%      | 75%       | 55%      | 71%       | HEALTHY   |
+| ETL-HOST          | 10.10.1.80   | 8     | 32       | 500       | 15%      | 82%       | 42%      | 88%       | WARNING   |
+| ZABBIX-SERVER     | 10.10.50.20  | 4     | 16       | 500       | 11%      | 29%       | 40%      | 55%       | HEALTHY   |
+| ELK-NODE-1        | 10.10.50.50  | 8     | 64       | 5000      | 38%      | 67%       | 72%      | 91%       | WARNING   |
+
+STATUS THRESHOLDS:
+  HEALTHY  : CPU avg <70%, RAM avg <75%, no sustained peaks >90%
+  WARNING  : CPU avg >70% OR RAM avg >75% OR any peak >90% in last 30 days
+  CRITICAL : CPU avg >85% OR RAM avg >85% OR peak >95% sustained >5 min
+
+===========================
+SHEET 2 — DATABASE CAPACITY
+===========================
+
+| Database          | Host         | Engine        | Size (GB) | Growth/Month | Max Size | Used%  | Status    |
+|-------------------|--------------|---------------|-----------|--------------|----------|--------|-----------|
+| CBS-OracleDB      | 10.10.2.10   | Oracle 19c    | 1840      | +22 GB       | 3000 GB  | 61%    | HEALTHY   |
+| Auth-PostgreSQL    | 10.10.2.11   | PostgreSQL 15 | 45        | +1.2 GB      | 500 GB   | 9%     | HEALTHY   |
+| Payments-PostgreSQL| 10.10.2.12   | PostgreSQL 15 | 312       | +18 GB       | 1000 GB  | 31%    | HEALTHY   |
+| Fraud-Redis        | 10.10.2.13   | Redis 7.2     | 8         | +0.2 GB      | 32 GB    | 25%    | HEALTHY   |
+| Snowflake-DWH      | Cloud        | Snowflake     | 12400     | +310 GB      | Elastic  | N/A    | HEALTHY   |
+
+PROJECTION — CBS Oracle DB:
+  Current size    : 1840 GB
+  Monthly growth  : +22 GB
+  Time to 80% cap : ~13.6 months (approx. May 2026)
+  Recommended action: Initiate storage expansion planning by Q3 2025. DBA team to review partitioning strategy.
+
+PROJECTION — Payments PostgreSQL:
+  Current size    : 312 GB
+  Monthly growth  : +18 GB
+  Time to 80% cap : ~37.8 months — low urgency
+
+===========================
+SHEET 3 — TRANSACTION VOLUME TRENDS
+===========================
+
+| Month     | Total Txns  | Payments Txns | Fraud Checks | SWIFT Transfers | Avg Latency (ms) | Peak TPS |
+|-----------|-------------|---------------|--------------|-----------------|------------------|----------|
+| Oct 2024  | 4,120,000   | 1,840,000     | 1,840,000    | 92,000          | 187              | 312      |
+| Nov 2024  | 4,380,000   | 1,960,000     | 1,960,000    | 98,000          | 192              | 341      |
+| Dec 2024  | 5,910,000   | 2,640,000     | 2,640,000    | 132,000         | 241              | 487      |
+| Jan 2025  | 4,210,000   | 1,880,000     | 1,880,000    | 94,000          | 189              | 318      |
+| Feb 2025  | 4,350,000   | 1,940,000     | 1,940,000    | 97,000          | 191              | 327      |
+| Mar 2025  | 4,690,000   | 2,090,000     | 2,090,000    | 104,500         | 198              | 354      |
+
+KEY OBSERVATIONS:
+  - December 2024 shows 35% volume spike (seasonal/year-end). PAYMENTS-GW peak CPU hit 88% during this period.
+  - Fraud Engine checks 100% of payment transactions — volume scales linearly with payments.
+  - SWIFT transfers average ~5% of total payment volume.
+  - Average latency trending upward: +11ms over 6 months. Root cause under investigation (see INC-2024-1147).
+  - Peak TPS of 487 (December) approaches PAYMENTS-GW capacity limit of ~500 TPS before horizontal scaling is needed.
+
+===========================
+SHEET 4 — CAPACITY RECOMMENDATIONS
+===========================
+
+PRIORITY 1 — PAYMENTS-GW Scale-Up (Immediate)
+  Issue: Peak CPU 88%, approaching 500 TPS ceiling. Dec 2024 near-breach event.
+  Recommendation: Add second PAYMENTS-GW instance (horizontal scale) behind load balancer.
+  Estimated effort: 2 sprints. Infra cost: ~$1,200/month additional compute.
+  Risk if not done: Service degradation during next peak period (Dec 2025 or major promotional event).
+
+PRIORITY 2 — FRAUD-ENGINE Optimisation (Q3 2025)
+  Issue: Peak CPU 94%, highest across all services. Redis cache TTL reduction increases recompute load.
+  Recommendation: Profile scoring model inference. Consider model quantisation or GPU offload for batch scoring.
+  Note: Quarterly retraining (FRAUD-RETRAIN-001) spikes CPU to 100% for ~3 hours — schedule during low-traffic window.
+
+PRIORITY 3 — ELK Node Expansion (Q3 2025)
+  Issue: RAM peak 91%, hot-tier disk filling at rate of ~180 GB/month.
+  Recommendation: Add second ELK node (current single-node setup is also a resilience risk).
+  Estimated effort: 1 sprint. Storage cost: +$400/month.
+
+PRIORITY 4 — CBS Oracle DB Storage Planning (Q4 2025)
+  Issue: At current growth rate, hits 80% capacity by May 2026.
+  Recommendation: DBA team to review table partitioning and archival strategy in Q3 2025.
+  Archival candidate: Transaction records >3 years old (~600 GB eligible).
