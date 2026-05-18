@@ -1,0 +1,65 @@
+DOCUMENT: Disaster Recovery and Business Continuity Plan
+TOPIC: DR, BCP, Failover, Recovery
+VERSION: 1.8
+LAST UPDATED: 2025-01-20
+OWNER: Platform Engineering Team
+
+===========================
+RECOVERY OBJECTIVES
+===========================
+
+RTO (Recovery Time Objective) for Tier 1 applications: 4 hours
+RPO (Recovery Point Objective): 1 hour (maximum acceptable data loss)
+
+===========================
+APPLICATION TIERS
+===========================
+
+TIER 1 - Critical (RTO 4 hours, RPO 1 hour):
+  - CBS (Core Banking System)
+  - AUTH-SVC
+  - PAYMENTS-GW
+
+TIER 2 - Important (RTO 8 hours, RPO 4 hours):
+  - FRAUD-ENGINE
+  - REPORTING-SVC
+  - SWIFT-ADAPTER
+
+TIER 3 - Standard (RTO 24 hours, RPO 24 hours):
+  - DATA-WAREHOUSE
+  - Airflow Orchestration
+  - Monitoring Tools (Zabbix)
+
+===========================
+DR SITE CONFIGURATION
+===========================
+
+Primary Site: DC-WEST (10.10.x.x subnet)
+DR Site: DC-EAST (10.20.x.x subnet)
+
+Tier 1 applications maintain hot-standby at DC-EAST.
+Database replication: Oracle Data Guard (CBS), PostgreSQL streaming (AUTH-SVC, PAYMENTS-GW).
+Replication lag must stay below 60 seconds.
+
+DR DNS Failover: AWS Route 53, health checks, TTL 60 seconds.
+Automatic failover for Tier 1 only.
+
+===========================
+FAILOVER STEPS
+===========================
+
+STEP 1: Platform Engineering Lead declares DR event.
+STEP 2: AWS Route 53 DNS switch (automatic after 3 failed health checks, 10s interval).
+STEP 3: Run validation script: /scripts/dr/validate_dr.sh from MGMT-NET jump server.
+STEP 4: Notify all-staff@company.com within 30 minutes.
+STEP 5: Monitor DR site for 2 hours before confirming stable.
+
+Failback requires CAB approval. Minimum 24 hours stabilisation before failback.
+
+===========================
+DR TEST SCHEDULE
+===========================
+
+Full DR drill: Annually in Q4 (October)
+Partial Tier 1 test: Q2 each year
+Results reviewed by Risk Committee.

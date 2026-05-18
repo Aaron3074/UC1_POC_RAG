@@ -1,0 +1,58 @@
+DOCUMENT: Core Network Architecture Overview
+TOPIC: Network Architecture
+VERSION: 3.2
+LAST UPDATED: 2024-11-10
+OWNER: Infrastructure Team
+
+===========================
+CORE NETWORK TOPOLOGY
+===========================
+
+The enterprise network is divided into three primary zones:
+1. DMZ (Demilitarized Zone) - External-facing services
+2. Internal Network - Core business applications
+3. Restricted Zone - Sensitive financial and compliance systems
+
+All traffic between zones passes through the Central Firewall Cluster (CFC).
+
+===========================
+KEY NETWORK SEGMENTS
+===========================
+
+SEGMENT: PROD-NET-01
+  IP Range: 10.10.1.0/24
+  Purpose: Production application servers
+  VLAN ID: 101
+  Gateway: 10.10.1.1
+
+SEGMENT: PROD-NET-02
+  IP Range: 10.10.2.0/24
+  Purpose: Production database servers
+  VLAN ID: 102
+  Gateway: 10.10.2.1
+
+SEGMENT: MGMT-NET
+  IP Range: 10.10.50.0/24
+  Purpose: Management and monitoring
+  VLAN ID: 150
+  Gateway: 10.10.50.1
+
+SEGMENT: DMZ-NET
+  IP Range: 172.16.1.0/24
+  Purpose: Externally accessible services
+  VLAN ID: 200
+  Gateway: 172.16.1.1
+
+===========================
+REDUNDANCY AND FAILOVER
+===========================
+
+Active-passive redundancy for all core switches. Failover time under 30 seconds.
+Primary data center: DC-WEST. Failover: DC-EAST. Connected via dual 10Gbps MPLS links.
+
+===========================
+MONITORING
+===========================
+
+All network devices monitored via Zabbix on 10.10.50.20.
+SNMP traps forwarded to central SIEM at 10.10.50.100.
