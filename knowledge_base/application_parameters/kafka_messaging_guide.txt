@@ -1,0 +1,75 @@
+DOCUMENT: Kafka Messaging Infrastructure Guide
+TOPIC: Kafka, Event Streaming, Topics, Consumer Groups
+VERSION: 1.4
+LAST UPDATED: 2024-09-15
+OWNER: Platform Engineering Team
+
+===========================
+KAFKA CLUSTER DETAILS
+===========================
+
+Host: 10.10.1.70
+Port 9092: Plaintext (internal only)
+Port 9093: SSL/TLS (cross-zone)
+Kafka Version: 3.5.1
+Zookeeper: 10.10.1.71:2181 (not exposed outside cluster)
+Brokers: 3 (fault tolerant)
+Replication Factor: 3 (all topics)
+Min In-Sync Replicas: 2
+
+===========================
+TOPICS
+===========================
+
+TOPIC: fraud.transaction.events
+  Producer: PAYMENTS-GW
+  Consumer: FRAUD-ENGINE (group: fraud-engine-cg-prod)
+  Purpose: Every payment published here. FRAUD-ENGINE scores in real time.
+  Retention: 7 days | Partitions: 12
+
+TOPIC: cbs.account.updates
+  Producer: CBS
+  Consumers: REPORTING-SVC, DATA-WAREHOUSE ETL
+  Purpose: Account creation, update, closure events.
+  Retention: 30 days | Partitions: 6
+
+TOPIC: payments.status.updates
+  Producers: PAYMENTS-GW, SWIFT-ADAPTER
+  Consumer: CBS (transaction status updates)
+  Purpose: Payment completion, failure, SWIFT ACK events.
+  Retention: 14 days | Partitions: 6
+
+TOPIC: audit.events
+  Producers: All applications (AUTH-SVC, CBS, PAYMENTS-GW, etc.)
+  Consumer: SIEM (10.10.50.100)
+  Purpose: Security and audit events for SIEM correlation.
+  Retention: 90 days | Partitions: 3
+
+===========================
+CONSUMER GROUP WARNINGS
+===========================
+
+CRITICAL: Changing FRAUD_KAFKA_CONSUMER_GROUP resets the offset to beginning of topic.
+This causes the Fraud Engine to reprocess potentially millions of messages.
+Always coordinate with Risk Technology team before changing any consumer group ID.
+
+To check consumer lag:
+  kafka-consumer-groups.sh --bootstrap-server 10.10.1.70:9092 --describe --group fraud-engine-cg-prod
+High lag (>10,000 messages) means the consumer is falling behind and may need scaling.
+
+===========================
+PRODUCER CONFIGURATION
+===========================
+
+All producers use:
+  acks=all (all replicas must acknowledge)
+  retries=3
+  max.in.flight.requests.per.connection=1 (prevents out-of-order messages on retry)
+
+===========================
+MONITORING
+===========================
+
+Confluent Control Center: http://10.10.50.40:9021 (MGMT-NET only)
+Alerts: broker down, under-replicated partitions, consumer lag >50,000 messages.
+Alert recipients: platform-eng@company.com

@@ -1,0 +1,90 @@
+DOCUMENT: Application Parameter Reference Guide
+TOPIC: Configuration Parameters, Environment Variables
+VERSION: 5.0
+LAST UPDATED: 2025-03-01
+OWNER: Platform Engineering Team
+
+===========================
+CORE BANKING SYSTEM (CBS) PARAMETERS
+===========================
+
+PARAM: CBS_MAX_TXN_RETRY
+  Type: Integer | Default: 3 | Range: 1-5
+  Description: Max retry attempts for a failed transaction before it is escalated.
+  Note: Setting above 5 risks duplicate transactions.
+  Dependency: Must align with PAYMENTS-GW_TXN_TIMEOUT to avoid race conditions.
+
+PARAM: CBS_SESSION_TIMEOUT_SEC
+  Type: Integer | Default: 1800 | Range: 300-3600
+  Description: Idle session timeout in seconds. PCI-DSS requires minimum 900 sec (15 min).
+
+PARAM: CBS_BATCH_WINDOW_START
+  Type: Time (HH:MM) | Default: 23:00
+  Description: Nightly batch start time. Must not overlap DWH ETL which starts 23:30.
+  Coordinate changes with Data Engineering Team.
+
+PARAM: CBS_DB_POOL_SIZE
+  Type: Integer | Default: 50 | Range: 10-200
+  Description: Oracle DB connection pool size. Increasing beyond 150 requires DBA approval.
+
+===========================
+PAYMENTS GATEWAY PARAMETERS
+===========================
+
+PARAM: PAYMENTS-GW_TXN_TIMEOUT
+  Type: Integer (milliseconds) | Default: 30000 | Range: 5000-60000
+  Description: Transaction timeout in ms. Must align with CBS_MAX_TXN_RETRY.
+  Worst case total: TXN_TIMEOUT x MAX_RETRY = 90 seconds at defaults.
+
+PARAM: PAYMENTS-GW_FRAUD_THRESHOLD
+  Type: Float | Default: 0.75 | Range: 0.0-1.0
+  Description: Minimum fraud score from Fraud Engine to auto-block a payment.
+  0.75 = 75% fraud probability triggers block. Lowering increases false positives.
+
+PARAM: PAYMENTS-GW_MAX_PAYLOAD_SIZE_MB
+  Type: Float | Default: 5.0 | Range: 1.0-20.0
+  Description: Maximum request payload size in MB. Exceeding returns HTTP 413.
+
+===========================
+FRAUD ENGINE PARAMETERS
+===========================
+
+PARAM: FRAUD_MODEL_VERSION
+  Type: String | Default: v3.2.1
+  Description: Active ML fraud detection model version. Updated quarterly via Model Registry.
+  Do NOT change manually.
+
+PARAM: FRAUD_REDIS_TTL_SEC
+  Type: Integer | Default: 3600
+  Description: Redis cache TTL for fraud scores. Lower = fresher scores, higher compute.
+  Not recommended below 300 seconds in production.
+
+PARAM: FRAUD_KAFKA_CONSUMER_GROUP
+  Type: String | Default: fraud-engine-cg-prod
+  Description: Kafka consumer group ID. Changing this resets offset — reprocesses all messages.
+
+===========================
+AUTHENTICATION SERVICE PARAMETERS
+===========================
+
+PARAM: AUTH_TOKEN_EXPIRY_SEC
+  Type: Integer | Default: 900
+  Description: JWT access token validity (15 minutes). Must refresh after expiry.
+
+PARAM: AUTH_REFRESH_TOKEN_EXPIRY_SEC
+  Type: Integer | Default: 86400
+  Description: Refresh token validity (24 hours). Full re-auth required after this.
+
+PARAM: AUTH_MAX_LOGIN_ATTEMPTS
+  Type: Integer | Default: 5
+  Description: Failed login attempts before account locked (15 minutes).
+  Governed by security policy SEC-POL-003.
+
+===========================
+INTERDEPENDENCY NOTES
+===========================
+
+1. CBS_BATCH_WINDOW_START must not overlap DWH ETL (23:30). Coordinate with Data Engineering.
+2. PAYMENTS-GW_TXN_TIMEOUT x CBS_MAX_TXN_RETRY = 90 seconds worst-case at defaults.
+3. FRAUD_REDIS_TTL_SEC below 300 not recommended in production.
+4. AUTH_MAX_LOGIN_ATTEMPTS governed by security policy SEC-POL-003.
