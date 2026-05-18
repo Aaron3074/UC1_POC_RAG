@@ -1,0 +1,113 @@
+DOCUMENT: Service Level Agreement Register and Actuals
+SOURCE_FORMAT: Excel Workbook (sla_register_2025.xlsx)
+TOPIC: SLA, SLO, Uptime, Availability, Breach History, Performance Targets
+VERSION: 3.2
+LAST UPDATED: 2025-04-15
+OWNER: Platform Engineering + Business Relationship Management
+REVIEW_CYCLE: Monthly
+
+===========================
+SHEET 1 — SLA TARGETS BY APPLICATION
+===========================
+
+| Application    | Availability Target | Max Planned Downtime/mo | Response Time SLO (p99) | Error Rate SLO | Support Window     |
+|----------------|---------------------|--------------------------|--------------------------|----------------|--------------------|
+| CBS            | 99.95%              | 21 min/month             | < 500ms                  | < 0.1%         | 24x7               |
+| PAYMENTS-GW    | 99.95%              | 21 min/month             | < 2,000ms                | < 0.05%        | 24x7               |
+| FRAUD-ENGINE   | 99.90%              | 43 min/month             | < 200ms                  | < 0.5%         | 24x7               |
+| REPORTING-SVC  | 99.50%              | 3.6 hr/month             | < 10,000ms               | < 1.0%         | Business hours     |
+| AUTH-SVC       | 99.99%              | 4 min/month              | < 100ms                  | < 0.01%        | 24x7               |
+| SWIFT-ADAPTER  | 99.90%              | 43 min/month             | < 120,000ms (SWIFT dep.) | < 0.1%         | Business hours     |
+| DATA-WAREHOUSE | 99.00%              | 7.2 hr/month             | N/A (batch)              | < 2.0%         | Business hours     |
+| Kafka Cluster  | 99.95%              | 21 min/month             | < 50ms (produce/consume) | < 0.01%        | 24x7               |
+
+NOTE: AUTH-SVC at 99.99% reflects its role as single point of authentication failure.
+      Any AUTH-SVC outage cascades to ALL other applications immediately.
+
+===========================
+SHEET 2 — SLA ACTUALS (Last 6 Months)
+===========================
+
+CBS Availability:
+  Oct 2024: 99.97% (11.2 min downtime — planned maintenance)
+  Nov 2024: 99.98% (8.6 min downtime — planned maintenance)
+  Dec 2024: 99.91% (39.3 min downtime — INC-2024-1201: DB connection pool exhaustion) ⚠ BREACH
+  Jan 2025: 99.96% (17.4 min downtime — planned maintenance)
+  Feb 2025: 99.97% (12.8 min downtime — planned maintenance)
+  Mar 2025: 99.98% (8.6 min downtime — planned maintenance)
+  6-Month Average: 99.96% | Breaches: 1
+
+PAYMENTS-GW Availability:
+  Oct 2024: 99.97% — OK
+  Nov 2024: 99.96% — OK
+  Dec 2024: 99.88% (51.8 min downtime — INC-2024-1201 cascade + INC-2024-1198) ⚠ BREACH
+  Jan 2025: 99.97% — OK
+  Feb 2025: 99.98% — OK
+  Mar 2025: 99.95% — OK
+  6-Month Average: 99.94% | Breaches: 1
+
+FRAUD-ENGINE Availability:
+  Oct 2024: 99.95% — OK
+  Nov 2024: 99.93% — OK
+  Dec 2024: 99.82% (77.8 min — INC-2024-1198: Redis OOM, model scoring halted) ⚠ BREACH
+  Jan 2025: 99.94% — OK
+  Feb 2025: 99.96% — OK
+  Mar 2025: 99.93% — OK
+  6-Month Average: 99.92% | Breaches: 1
+
+AUTH-SVC Availability:
+  Oct–Mar: 100.00% across all months — EXCEEDING TARGET
+  6-Month Average: 100.00% | Breaches: 0
+
+REPORTING-SVC Availability:
+  Dec 2024: 98.90% (5.5 hr — dependent on DWH, cascade from ETL failures) ⚠ BREACH
+  All other months: >99.5%
+  6-Month Average: 99.42% | Breaches: 1
+
+===========================
+SHEET 3 — BREACH DETAIL LOG
+===========================
+
+BREACH: INC-2024-1198
+  Date: 2024-12-14 02:17–04:35 (138 min total)
+  Affected: FRAUD-ENGINE (primary), PAYMENTS-GW (cascade), CBS (partial degradation)
+  Root Cause: Fraud Engine Redis ran Out of Memory (OOM). FRAUD_REDIS_TTL_SEC had been
+              reduced from 3600 to 300 by Risk Tech team without Platform Engineering sign-off.
+              This caused 12x recompute load, overwhelming Redis memory allocation.
+  Resolution: Redis flushed, FRAUD_REDIS_TTL_SEC restored to 3600, OOM alert threshold lowered.
+  SLA Impact: FRAUD-ENGINE breach (77.8 min vs 43 min target), PAYMENTS-GW breach (cascade).
+  Prevention: Change management process updated — parameter changes require CAB approval.
+              Redis OOM alert added to Zabbix (threshold: 80% memory).
+  Status: CLOSED. Post-incident review completed 2024-12-18.
+
+BREACH: INC-2024-1201
+  Date: 2024-12-22 09:44–10:23 (39 min)
+  Affected: CBS (primary), PAYMENTS-GW (cascade)
+  Root Cause: CBS Oracle DB connection pool exhausted (CBS_DB_POOL_SIZE = 50).
+              December transaction volume spike (35% above normal) caused pool starvation.
+              New transactions queued, then timed out after 30 sec. CBS returned 503.
+  Resolution: CBS_DB_POOL_SIZE temporarily increased to 80 (DBA approved emergency change).
+              Permanent fix: pool size set to 100 with DBA sign-off. Connection monitoring added.
+  SLA Impact: CBS breach (39.3 min vs 21 min target). PAYMENTS-GW breach (cascade, 51.8 min).
+  Prevention: Capacity scaling plan initiated (see Capacity Register — PAYMENTS-GW priority).
+              Pool size auto-alert added at 80% utilisation.
+  Status: CLOSED. Permanent fix deployed 2025-01-08.
+
+===========================
+SHEET 4 — SLA PENALTY AND CREDIT SCHEDULE
+===========================
+
+Internal SLA credits apply between Platform Engineering and business units.
+
+| Availability Achieved | Credit to Business Unit          |
+|-----------------------|----------------------------------|
+| 99.90% – Target       | No credit                        |
+| 99.50% – 99.90%       | 5% of monthly service charge     |
+| 99.00% – 99.50%       | 10% of monthly service charge    |
+| Below 99.00%          | 25% of monthly service charge    |
+
+Credits applied in Q1 2025 (for Dec 2024 breaches):
+  CBS         : 5% credit — $2,400
+  PAYMENTS-GW : 5% credit — $1,800
+  FRAUD-ENGINE: 5% credit — $1,200
+  Total Q1 credits: $5,400
