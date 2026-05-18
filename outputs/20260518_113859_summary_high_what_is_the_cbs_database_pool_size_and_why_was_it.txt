@@ -1,0 +1,266 @@
+ENTERPRISE KNOWLEDGE ASSISTANT v7 — QUERY OUTPUT
+=================================================================
+Query      : What is the CBS database pool size and why was it changed?
+Intent     : SUMMARY
+Confidence : HIGH (78%)
+Sources    : 6 document(s)
+Timestamp  : 2026-05-18T11:38:59.159837
+=================================================================
+
+SUMMARY
+─────────────────────────────────────────────────────────────────
+────────────────────────────────────────
+[1] Email Thread Engineering Decisions  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —
+
+  [FROM: data eng lead]
+    FROM: data eng lead
+    TO: platform eng lead, CBS team lead
+    SUBJECT: RE: RE: RE: CBS schema change notification process
+
+  [1. any new column added to CBS transaction table must be notified to data eng BE]
+    1. any new column added to CBS transaction table must be notified to data eng BEFORE deployment
+    2. use the #schema-changes slack channel
+    3. data eng gets minimum 3 days notice to update ETL mappings
+    4. CBS release checklist now has a mandatory field: "data eng notified Y/N"
+    5. if not notified and ETL breaks, CBS team owns the P1 response
+
+  [current consumer groups to never change without coordination:]
+    current consumer groups to never change without coordination:
+    - fraud-engine-cg-prod (fraud engine consuming fraud.transaction.events)
+    - whatever groups reporting-svc uses for cbs.account.updates
+
+  [yes CBS_DB_POOL_SIZE is now 100 (was 50, emergency change jan 8 2025 after the d]
+    yes CBS_DB_POOL_SIZE is now 100 (was 50, emergency change jan 8 2025 after the dec 22 incident).
+    DBA approved. if anyone wants to go above 150 they need formal DBA approval with impact analysis.
+    we now have connection monitoring - alert fires at 80% pool utilisation.
+    the december incident (INC-2024-1201) was because december peak volume (35% above normal)
+    exhausted the pool. connections were queuing then timing out. CBS returned 503 for 39 min.
+    22,000 transaction attempts failed. not our finest hour.
+
+────────────────────────────────────────
+[2] Dba Runbook Notes  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —  |  Updated: march 2025
+
+  [GENERAL DBA STUFF]
+    GENERAL DBA STUFF
+    - all production DB changes require DBA approval + CAB ticket
+    - emergency pool size changes can be approved by DBA team lead + platform lead (as happened in INC-2024-1201)
+    - read replicas exist for CBS and DWH (snowflake). use them for analytics.
+    - connection string format: postgresql://user:pass@host:port/dbname?sslmode=require
+    - all prod DBs require SSL. PGSSLMODE=require in application env.
+
+  [DATA WAREHOUSE (Snowflake - external SaaS)]
+    DATA WAREHOUSE (Snowflake - external SaaS)
+    - Snowflake account: company-prod.snowflakecomputing.com
+    - DWH_SNOWFLAKE_WAREHOUSE = COMPUTE_WH (medium, 2 clusters)
+    - Q1 2025 was 8% over Snowflake compute budget. data eng put query cost alerts in.
+    - ad-hoc queries over 1TB in the console = flag to data eng lead (dataeng@company.com)
+    - the fact_transactions table had a missing index after CBS v4.2.0 release (INC-2025-0288)
+    new column beneficiary_account_type was added but the index on it wasn't migrated.
+    DBA added: CREATE INDEX idx_fact_tx_ben_acct ON fact_transactions(beneficiary_account_type);
+    lesson: always check for missing indexes after a CBS release that touches transaction schema.
+
+  [CBS DATABASE (PostgreSQL 14.2 on 10.10.1.11 port 5432)]
+    CBS DATABASE (PostgreSQL 14.2 on 10.10.1.11 port 5432)
+    - CBS_DB_POOL_SIZE = 100 (was 50 before december 2024 incident INC-2024-1201)
+    the december incident was caused by pool exhaustion at peak december volume
+    quick math that platform_lead did in the slack thread: 500 TPS * 0.6s avg hold = 300 concurrent connections
+    we only had 50 slots. never again. now it's 100.
+    - zabbix alert fires at 80% pool utilisation (= 80 connections). that's the warning threshold.
+    if you get that alert and it's not december just check for a runaway query first.
+    - CBS postgres is on dedicated SSD RAID-10. do NOT run ad-hoc heavy queries on prod.
+    use the read replica at 10.10.1.12:5432 for reporting. the replica has a 30-60 sec lag.
+
+  [PAYMENTS GATEWAY DB (PostgreSQL 14.2 on 10.10.1.21 port 5432)]
+    PAYMENTS GATEWAY DB (PostgreSQL 14.2 on 10.10.1.21 port 5432)
+    - connection pool managed by PgBouncer on 10.10.1.21:6432
+    - PG_BOUNCER_POOL_SIZE = 40 for payments db
+    - payments db stores transaction state. session state refactor is in progress for v2.9.0 LB work.
+    - if payments GW is throwing 503 and CBS is fine, check pgbouncer logs:
+    /var/log/pgbouncer/pgbouncer.log
+
+────────────────────────────────────────
+[3] Architecture Sync Notes Feb2025  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —
+
+  [DATA ENGINEERING:]
+    DATA ENGINEERING:
+    etl schema validation is now live - this is what should have prevented the aug 2024 incident
+    (INC-2024-0892 where CBS added beneficiary_account_type column and didnt tell anyone, ETL
+    broke overnight). now if CBS changes schema without notifying data eng, the pre-flight check
+    catches it before processing starts. slack channel #schema-changes is mandatory for all schema
+    changes.
+
+  [open questions / parking lot:]
+    open questions / parking lot:
+    - who owns the snowflake cost governance? action: data eng to set up query cost alerts
+    - when does CBS need DBA approval to go above pool size 150? action: DBA team to document
+    - kafka zookeeper to KRaft migration - still targeting Q2 2026. ADR-008 approved in principle.
+
+  [snowflake costs are going up - Q1 came in at $52k vs $48.5k budget (8% over). th]
+    snowflake costs are going up - Q1 came in at $52k vs $48.5k budget (8% over). three big
+    ad-hoc analytics queries from BI team ran without query limits. data eng tightening governance
+    - all queries above 1TB scan need approval now.
+
+  [PLATFORM:]
+    PLATFORM:
+    kubernetes cluster provisioning is delayed 3 weeks due to hardware procurement.
+    containerisation of python services (payments gw, fraud engine, reporting, auth) was Q3
+    target, might slip to Q4.
+    service mesh (istio vs linkerd) poc - engineer bandwidth is stretched. might push to Q4.
+
+────────────────────────────────────────
+[4] Analyst Faq  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —  |  Updated: may 2025
+
+  [Q: what is the december freeze?]
+    Q: what is the december freeze?
+    A: After INC-2024-1201 (CBS pool exhaustion at december peak volume), the CTO approved a policy:
+    no production releases December 1-31. The december period has 35% above normal transaction volume.
+    Changes to cope with december (like CBS_DB_POOL_SIZE = 100) are done in October/November.
+    December capacity review is now scheduled for October 2025.
+
+  [Q: what is REPORTING-SVC and why is it sometimes slow?]
+    Q: what is REPORTING-SVC and why is it sometimes slow?
+    A: Reporting Service (REPORTING-SVC) generates regulatory reports (LCR, NSFR, etc.)
+    Host: 10.10.1.40, Port: 8200. It reads from Data Warehouse (Snowflake), not from CBS directly.
+    When it's slow, check DWH first (Snowflake console), not REPORTING-SVC itself.
+    The slowness in march 2025 was a missing index on fact_transactions (INC-2025-0288).
+    DBA added it. Should be fine now.
+
+  [Q: what is CBS?]
+    Q: what is CBS?
+    A: Core Banking System. It's the mainframe-era system that holds all account data, balances, and
+    transaction history. When people say "the core", "the mainframe", or "account system" they mean CBS.
+    Host: 10.10.1.10, Port: 8080. API endpoint: http://10.10.1.10:8080/api/v2/
+    CBS is owned by the CBS team (cbs-ops@company.com). Platform eng does the infra.
+
+  [Q: who do I call when X is broken?]
+    Q: who do I call when X is broken?
+    A: CBS issues: cbs-ops@company.com or CBS manager on PagerDuty
+    Payments issues: payments-lead on PagerDuty
+    Fraud / model scoring: risktech@company.com
+    Auth / SSO: security-ops@company.com
+    Infra / network: platform-eng@company.com / PE-ONCALL PagerDuty
+    Data warehouse: dataeng@company.com
+    DBA: dba-team@company.com / dba-oncall PagerDuty
+
+────────────────────────────────────────
+[5] Analyst Question Log  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —
+
+  [---]
+    ---
+    Q: what is the CBS session timeout and can we change it?
+    A: CBS_SESSION_TIMEOUT_SEC is currently 1800 seconds (30 minutes). PCI-DSS requires minimum
+    900 seconds (15 min) and max 3600 (60 min). you CAN change it within that range but it
+    needs a CAB request. dont go below 900 or youll fail the QSA audit.
+
+  [---]
+    ---
+    Q: why is my report showing yesterday's data and not today's?
+    A: the DWH (snowflake) is updated nightly by the ETL pipeline which runs from 23:30.
+    so anything you run before that has data from the previous day (T+1 lag).
+    if you need same-day data you need to query CBS directly - talk to CBS team for read access.
+    if its past midnight and you still see old data, the ETL might have failed - check airflow
+    at http://10.10.50.30:8081 or ask data eng.
+
+  [---]
+    ---
+    Q: the payments portal shows "service temporarily unavailable". what does that mean?
+    A: most likely one of: payments GW is down, fraud engine is down (payments GW calls it
+    synchronously), or CBS is down. check in that order:
+    curl http://10.10.1.20:9000/payments/health
+    curl http://10.10.1.30:8500/fraud/score/health
+    curl http://10.10.1.10:8080/api/v2/health
+    if you cant reach any of them, youre not on MGMT-NET. need VPN.
+
+  [---]
+    ---
+    Q: what is SWIFT BIC code and where is it configured?
+    A: BIC (Bank Identifier Code) is BNPAFRPPXXX. configured in SWIFT-ADAPTER as SWIFT_BIC_CODE.
+    this must match the SWIFT network registration. do NOT change this.
+    any change requires SWIFT operations team + compliance sign-off + SWIFT Alliance testing cycle.
+
+─────────────────────────────────────────────────────────────────
+CONFIDENCE: ✓ HIGH  ██████████  (78%)
+─────────────────────────────────────────────────────────────────
+  • Strong: 6 documents matched the query
+  • Strong relevance score (43.2)
+  • Top source clearly dominant — high specificity
+  • Mixed document quality — some sources are unstructured
+  • No exact query terms — synonym or semantic match
+
+─────────────────────────────────────────────────────────────────
+RELATED QUESTIONS
+─────────────────────────────────────────────────────────────────
+  1. What was the full root cause and remediation for INC-2024-1201?
+  2. What is the current capacity and SLA status of CBS?
+  3. What happens if SUBJECT is changed without CAB approval?
+
+─────────────────────────────────────────────────────────────────
+REFERENCES  —  open source files for complete detail
+─────────────────────────────────────────────────────────────────
+[1] email_thread_engineering_decisions.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Email Thread Engineering Decisions
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : structured  |  BM25: 43.2  |  Relevance: 100%
+     Matched   : FROM: data eng lead › 1. any new column added to CBS transaction table must be notified to data eng BE › current consumer groups to never change without coordination:
+     Path      : knowledge_base\unstructured_samples\email_thread_engineering_decisions.txt
+
+[2] dba_runbook_notes_informal.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Dba Runbook Notes
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated march 2025
+     Quality   : partial  |  BM25: 40.2  |  Relevance: 98%
+     Matched   : GENERAL DBA STUFF › DATA WAREHOUSE (Snowflake - external SaaS) › CBS DATABASE (PostgreSQL 14.2 on 10.10.1.11 port 5432)
+     ℹ Note    : Partially structured — some metadata inferred from filename/folder
+     Path      : knowledge_base\unstructured_samples\dba_runbook_notes_informal.txt
+
+[3] architecture_sync_notes_feb2025.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Architecture Sync Notes Feb2025
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : partial  |  BM25: 37.4  |  Relevance: 96%
+     Matched   : DATA ENGINEERING: › open questions / parking lot: › snowflake costs are going up - Q1 came in at $52k vs $48.5k budget (8% over). th
+     ℹ Note    : Partially structured — some metadata inferred from filename/folder
+     Path      : knowledge_base\unstructured_samples\architecture_sync_notes_feb2025.txt
+
+[4] new_analyst_faq.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Analyst Faq
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated may 2025
+     Quality   : structured  |  BM25: 37.1  |  Relevance: 96%
+     Matched   : Q: what is the december freeze? › Q: what is REPORTING-SVC and why is it sometimes slow? › Q: what is CBS?
+     Path      : knowledge_base\unstructured_samples\new_analyst_faq.txt
+
+[5] analyst_question_log.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Analyst Question Log
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : structured  |  BM25: 37.0  |  Relevance: 96%
+     Path      : knowledge_base\unstructured_samples\analyst_question_log.txt
+
+[6] parameter_notes_from_call.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Parameter Notes From Call
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : unstructured  |  BM25: 37.0  |  Relevance: 95%
+     Matched   : CORE BANKING (CBS) stuff: › PAYMENTS GATEWAY: › FRAUD ENGINE stuff:
+     ⚠ Note    : Unstructured doc — no formal metadata, verify content manually
+     Path      : knowledge_base\unstructured_samples\parameter_notes_from_call.txt

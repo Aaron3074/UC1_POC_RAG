@@ -1,0 +1,213 @@
+ENTERPRISE KNOWLEDGE ASSISTANT v7 — QUERY OUTPUT
+=================================================================
+Query      : Users are getting 401 errors and cannot log in
+Intent     : TROUBLESHOOT
+Confidence : HIGH (100%)
+Sources    : 6 document(s)
+Timestamp  : 2026-05-18T11:38:25.334117
+=================================================================
+
+TROUBLESHOOTING GUIDE
+─────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────
+[1] Operations Troubleshooting Runbook  [troubleshooting]  (.TXT)
+
+  Section: ISSUE: Users cannot log in — 401 errors — authentication failing — SSO down — login broken
+  Root Cause(s):
+    • - All apps rejecting requests simultaneously (indicates AUTH-SVC is the root cause)
+    • Single user locked    → Check AUTH_MAX_LOGIN_ATTEMPTS in Keycloak admin (account lock after 5 failures).
+    • If DOWN: this is the root cause — all apps will return 401 until AUTH-SVC recovers.
+    • If unreachable: auth database failure — page Security team immediately.
+  Diagnostic Steps:
+    FIRST CHECK — is this one user or all users?
+    Intermittent for many → Token expiry or refresh issue. Check AUTH_TOKEN_EXPIRY_SEC (default 900s).
+    2. Check if PostgreSQL (Keycloak DB) is reachable from AUTH-SVC host:
+    Navigate to Users → find affected user → Sessions tab → check if locked.
+    4. Check LDAP connectivity (AUTH-SVC federates to corporate LDAP):
+    5. Check token configuration — if tokens are expiring too fast:
+    6. Review Keycloak logs for specific error: /var/log/keycloak/keycloak.log
+    Look for: "DB connection refused", "LDAP error", "realm not found", "client not found"
+  Commands:
+    > - Users getting 401 Unauthorized errors across one or more applications
+    > - "Invalid token" or "Token expired" errors in application logs
+    > - Users reporting they cannot log in / login not working / unable to authenticate
+    > 1. Check AUTH-SVC health: curl https://10.10.1.50:8443/auth/health
+    > psql -h localhost -U keycloak -c "\l"
+    > ldapsearch -x -H ldap://10.10.50.10 -b "dc=company,dc=com"
+    > If misconfigured, users will be forced to re-authenticate repeatedly.
+    > - All apps lose authentication capability when AUTH-SVC is down — treat as highest priority
+
+  Section: ISSUE: Users getting 403 Forbidden — access denied — permission denied — wrong role
+  Diagnostic Steps:
+    2. Check user's role in Keycloak Admin Console → Users → [username] → Role Mappings
+  Commands:
+    > 1. Confirm user can authenticate (if 401 and 403 both, fix 401 first)
+    > 3. Verify the correct role is assigned for the application they need:
+
+  Section: ISSUE: CBS returning 503 — core banking unavailable — mainframe down
+  Root Cause(s):
+    • - Payments failing because CBS is unavailable
+  Diagnostic Steps:
+    3. Check Oracle DB connection pool — CBS_DB_POOL_SIZE default is 100 (was 50 before INC-2024-1201).
+    4. Check Oracle DB: sqlplus / as sysdba (from CBS host). Look for lock contention or tablespace full.
+    5. Check CBS_BATCH_WINDOW_START — if during batch window (23:00-01:00), CBS may be under high load.
+    Do not restart CBS during batch window without CBS Team approval.
+    6. Review logs: /var/log/cbs/app.log
+  Commands:
+    > 1. Check CBS health: curl http://10.10.1.10:8080/api/v2/health
+    > 2. SSH to 10.10.1.10 from MGMT-NET: systemctl status cbs
+
+  Section: ISSUE: Kafka broker down / under-replicated partitions
+  Root Cause(s):
+    • 3. Check disk space — INC-2024-0234 and INC-2025-0044 were both caused by log segment accumulation:
+  Diagnostic Steps:
+    Do NOT restart all brokers simultaneously.
+  Commands:
+    > 1. Check which broker is down: kafka-broker-api-versions.sh --bootstrap-server 10.10.1.70:9092
+    > 2. SSH to affected broker (10.10.1.70, 71, or 72): systemctl status kafka
+    > df -h /kafka/data
+    > If disk >80%: kafka-log-dirs.sh to identify large topics, then run log compaction.
+    > 4. With replication factor 3 and min.ISR=2, cluster stays operational with 1 broker down.
+    > 5. Check Zabbix alert for under-replicated partitions.
+
+
+────────────────────────────────────────
+[2] Analyst Faq  [unstructured_samples]  (.TXT)
+
+  Section: Q: what is AUTH-SVC / why do I see 401 errors?
+  Diagnostic Steps:
+    If EVERYONE is getting 401s simultaneously: AUTH-SVC is probably down. Check health first.
+  Commands:
+    > AUTH-SVC health: curl https://10.10.1.50:8443/auth/health (expected: {"status":"UP"})
+
+  Section: Q: where is monitoring?
+  Commands:
+    > - Datadog: https://app.datadoghq.com (APM, application metrics, dashboards)
+
+
+────────────────────────────────────────
+[3] Monitoring and Alerting Infrastructure Guide  [troubleshooting]  (.TXT)
+
+  Section: ELK STACK
+  Root Cause(s):
+    • Payment failures: app:payments-gw AND message:*failed*
+    • Auth failures: app:auth-svc AND message:*401*
+
+  Section: MONITORING STACK
+  Diagnostic Steps:
+    LAYER 5 — Synthetic: AWS CloudWatch health checks every 60 seconds
+
+
+────────────────────────────────────────
+[4] Analyst Question Log  [unstructured_samples]  (.TXT)
+
+  Section: ANALYST QUESTION LOG - platform eng slack #ask-platform
+  Commands:
+    > purpose: common questions we keep getting asked. writing them down so we stop repeating ourselves.
+
+
+────────────────────────────────────────
+[5] API Integration Standards and Developer Guide  [connectivity_ports]  (.DOCX)
+
+  Section: ERROR RESPONSE FORMAT
+  Root Cause(s):
+    • 400 Bad Request    — Invalid input, validation failure
+    • 503 Service Unavailable — Downstream dependency failure
+  Commands:
+    > "details": {},          // optional — field-level validation errors
+    > 409 Conflict       — Duplicate resource (e.g. duplicate payment reference)
+
+  Section: AUTHENTICATION AND AUTHORISATION
+  Diagnostic Steps:
+    4. Extract user role from token claims. Check against required role for the endpoint.
+  Commands:
+    > Service-to-service calls (machine accounts) use client credentials flow.
+
+────────────────────────────────────────
+ESCALATION PATH
+  If unreachable: auth database failure — page Security team immediately.
+  If LDAP unreachable: corporate directory issue — escalate to Security + Network teams.
+  ESCALATE:
+  - security-ops@company.com for all AUTH-SVC issues
+  - Declare SEV-1 if >100 users affected or if AUTH-SVC is completely down
+  ESCALATE: security-ops@company.com
+
+─────────────────────────────────────────────────────────────────
+CONFIDENCE: ✓ HIGH  ██████████  (100%)
+─────────────────────────────────────────────────────────────────
+  • Strong: 6 documents matched the query
+  • Strong relevance score (38.1)
+  • Top source clearly dominant — high specificity
+  • 3 of top sources are well-structured documents
+  • Exact query terms found in source (4 matches)
+
+─────────────────────────────────────────────────────────────────
+RELATED QUESTIONS
+─────────────────────────────────────────────────────────────────
+  1. What are the SLA targets and availability history for AUTH-SVC?
+  2. Which applications depend on REPORTING-SVC and what breaks if it goes down?
+  3. What action items and fixes came out of INC-2024-0341?
+
+─────────────────────────────────────────────────────────────────
+REFERENCES  —  open source files for complete detail
+─────────────────────────────────────────────────────────────────
+[1] operations_runbook.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Operations Troubleshooting Runbook
+     Folder    : troubleshooting
+     Owner     : Platform Engineering Team
+     Info      : v6.2 | Updated 2025-05-17
+     Quality   : structured  |  BM25: 38.1  |  Relevance: 100%
+     Matched   : ISSUE: Users cannot log in — 401 errors — authentication failing — SSO down — login broken › ISSUE: Users getting 403 Forbidden — access denied — permission denied — wrong role › ISSUE: CBS returning 503 — core banking unavailable — mainframe down
+     Path      : knowledge_base\troubleshooting\operations_runbook.txt
+
+[2] new_analyst_faq.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Analyst Faq
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated may 2025
+     Quality   : structured  |  BM25: 18.7  |  Relevance: 81%
+     Matched   : Q: what is AUTH-SVC / why do I see 401 errors? › Q: where is monitoring?
+     Path      : knowledge_base\unstructured_samples\new_analyst_faq.txt
+
+[3] monitoring_alerting_guide.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Monitoring and Alerting Infrastructure Guide
+     Folder    : troubleshooting
+     Owner     : Platform Engineering Team
+     Info      : v3.0 | Updated 2025-03-15
+     Quality   : structured  |  BM25: 15.2  |  Relevance: 75%
+     Matched   : ELK STACK › MONITORING STACK
+     Path      : knowledge_base\troubleshooting\monitoring_alerting_guide.txt
+
+[4] analyst_question_log.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Analyst Question Log
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : structured  |  BM25: 8.5  |  Relevance: 61%
+     Matched   : ANALYST QUESTION LOG - platform eng slack #ask-platform
+     Path      : knowledge_base\unstructured_samples\analyst_question_log.txt
+
+[5] api_integration_standards.docx  (.DOCX)
+     ───────────────────────────────────────────────────────
+     Title     : API Integration Standards and Developer Guide
+     Folder    : connectivity_ports
+     Owner     : Platform Engineering Team
+     Info      : v3.1 | Updated 2025-03-10
+     Quality   : structured  |  BM25: 8.3  |  Relevance: 60%
+     Matched   : ERROR RESPONSE FORMAT › AUTHENTICATION AND AUTHORISATION
+     Path      : knowledge_base\connectivity_ports\api_integration_standards.docx
+
+[6] dba_runbook_notes_informal.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Dba Runbook Notes
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated march 2025
+     Quality   : partial  |  BM25: 8.3  |  Relevance: 60%
+     Matched   : REDIS CACHES › KEYCLOAK / AUTH DATABASE (PostgreSQL 14.2 on localhost of auth host 10.10.1.50) › KAFKA BROKER DISK (this one bites people)
+     ℹ Note    : Partially structured — some metadata inferred from filename/folder
+     Path      : knowledge_base\unstructured_samples\dba_runbook_notes_informal.txt

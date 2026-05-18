@@ -1,0 +1,172 @@
+ENTERPRISE KNOWLEDGE ASSISTANT v7 — QUERY OUTPUT
+=================================================================
+Query      : What port does the mainframe use?
+Intent     : LOOKUP
+Confidence : HIGH (93%)
+Sources    : 6 document(s)
+Timestamp  : 2026-05-18T11:38:44.315774
+=================================================================
+
+ANSWER
+─────────────────────────────────────────────────────────────────
+[5] port_host_quick_reference.txt › APPLICATION HOST AND PORT REFERENCE
+  CBS / Core Banking System / Core Banking / Mainframe / Banking System / Core App:
+  Host: 10.10.1.10
+  Port: 8080 (HTTP)
+  API:  http://10.10.1.10:8080/api/v2
+  DB:   Oracle 19c on 10.10.2.10, port 1521
+  Tech: Java 17
+  PAYMENTS-GW / Payments Gateway / Payment Gateway / Payment Processor / PG:
+  Host: 10.10.1.20
+  Port: 9000 (HTTP)
+  API:  http://10.10.1.20:9000/payments
+  DB:   PostgreSQL 15 on 10.10.2.12, port 5432
+  Tech: Python 3.11
+
+[1] swift_integration_spec.txt › MESSAGE FLOW
+  1. Customer initiates international transfer via CBS.
+  2. CBS sends instruction to PAYMENTS-GW (port 9000).
+  3. PAYMENTS-GW validates and runs fraud check via FRAUD-ENGINE (port 8500).
+  4. If approved, PAYMENTS-GW calls SWIFT-ADAPTER (port 8090).
+  5. SWIFT-ADAPTER constructs MT103/MT202 and sends to SWIFT Alliance Gateway (192.168.200.5:3000).
+  6. SWIFT Gateway returns ACK/NAK.
+  7. SWIFT-ADAPTER returns status to PAYMENTS-GW, which updates CBS.
+
+[1] swift_integration_spec.txt › SWIFT ADAPTER CONFIGURATION
+  Host: 10.10.1.60
+  Internal Port: 8090 (used by PAYMENTS-GW)
+  External SWIFT Connection: 192.168.200.5 port 3000 (dedicated leased line, not internet)
+  PARAM: SWIFT_BIC_CODE = BNPAFRPPXXX
+  Bank Identifier Code. Must match SWIFT registration.
+  PARAM: SWIFT_MSG_FORMAT = MT103 (customer transfers), MT202 (bank-to-bank)
+  Standard SWIFT message types for international wire transfers.
+  PARAM: SWIFT_TIMEOUT_SEC = 120
+  Timeout for SWIFT acknowledgment. SWIFT typically responds within 30-90 seconds.
+  PARAM: SWIFT_MAX_TRANSFER_LIMIT_USD = 5000000.0
+  Maximum single transfer. Above this requires manual compliance approval.
+
+[3] application_connectivity_map.txt › CORE APPLICATIONS
+  APP: CORE-BANKING-SYS (CBS)
+  Host: 10.10.1.10
+  Port: 8080
+  Description: Primary core banking platform. Source of truth for all account data.
+  Tech Stack: Java 17, Oracle DB 19c
+  Depends On: PAYMENTS-GW, REPORTING-SVC, AUTH-SVC
+  API: http://10.10.1.10:8080/api/v2
+  APP: PAYMENTS-GATEWAY (PAYMENTS-GW)
+  Host: 10.10.1.20
+  Port: 9000
+  Description: Handles all inbound and outbound payment processing.
+  Tech Stack: Python 3.11, PostgreSQL 15
+
+[4] port_registry.txt › APPROVED PORTS
+  PORT 8080 — TCP/HTTP
+  Application: Core Banking System (CBS) REST API
+  Host: 10.10.1.10
+  Direction: Internal only (PROD-NET-01)
+  Firewall Rule: FW-RULE-0042
+  PORT 9000 — TCP/HTTP
+  Application: Payments Gateway API
+  Host: 10.10.1.20
+  Direction: Internal only (PROD-NET-01)
+  Firewall Rule: FW-RULE-0050
+  PORT 8500 — TCP/HTTP
+  Application: Fraud Engine Scoring API
+
+[4] port_registry.txt › BLOCKED PORTS
+  Port 23 (Telnet) — Blocked. Insecure.
+  Port 21 (FTP) — Blocked. Use SFTP on port 22.
+  Port 80 (HTTP) — Redirected to 443. Direct access blocked.
+  Port 3389 (RDP) — Blocked. Use jump server via SSH.
+
+────────────────────────────────────────
+ADDITIONAL CONTEXT
+
+[4] APPROVED PORTS  [port_registry.txt]
+  PORT 8080 — TCP/HTTP
+  Application: Core Banking System (CBS) REST API
+  Host: 10.10.1.10
+  Direction: Internal only (PROD-NET-01)
+  Firewall Rule: FW-RULE-0042
+  PORT 9000 — TCP/HTTP
+  Application: Payments Gateway API
+  Host: 10.10.1.20
+
+─────────────────────────────────────────────────────────────────
+CONFIDENCE: ✓ HIGH  ██████████  (93%)
+─────────────────────────────────────────────────────────────────
+  • Strong: 6 documents matched the query
+  • Strong relevance score (58.1)
+  • Top source clearly dominant — high specificity
+  • 3 of top sources are well-structured documents
+  • Partial query term match (1 terms found)
+
+─────────────────────────────────────────────────────────────────
+RELATED QUESTIONS
+─────────────────────────────────────────────────────────────────
+  1. What other configuration parameters does CBS have?
+  2. What is the impact of changing SWIFT_BIC_CODE and does it require CAB approval?
+  3. How does CBS connect to PAYMENTS-GW?
+
+─────────────────────────────────────────────────────────────────
+REFERENCES  —  open source files for complete detail
+─────────────────────────────────────────────────────────────────
+[1] swift_integration_spec.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : SWIFT Integration Technical Specification
+     Folder    : connectivity_ports
+     Owner     : Payments Team
+     Info      : v3.0 | Updated 2024-10-05
+     Quality   : structured  |  BM25: 58.1  |  Relevance: 100%
+     Matched   : MESSAGE FLOW › OVERVIEW › SWIFT ADAPTER CONFIGURATION
+     Path      : knowledge_base\connectivity_ports\swift_integration_spec.txt
+
+[2] api_integration_standards.docx  (.DOCX)
+     ───────────────────────────────────────────────────────
+     Title     : API Integration Standards and Developer Guide
+     Folder    : connectivity_ports
+     Owner     : Platform Engineering Team
+     Info      : v3.1 | Updated 2025-03-10
+     Quality   : structured  |  BM25: 53.1  |  Relevance: 97%
+     Matched   : API VERSIONING POLICY › INTERNAL API REGISTRY › RATE LIMITING
+     Path      : knowledge_base\connectivity_ports\api_integration_standards.docx
+
+[3] application_connectivity_map.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Application Connectivity and Integration Map
+     Folder    : connectivity_ports
+     Owner     : Architecture Team
+     Info      : v2.7 | Updated 2025-01-15
+     Quality   : structured  |  BM25: 52.9  |  Relevance: 97%
+     Matched   : DEPENDENCY CHAIN › CORE APPLICATIONS
+     Path      : knowledge_base\connectivity_ports\application_connectivity_map.txt
+
+[4] port_registry.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Enterprise Port and Protocol Registry
+     Folder    : connectivity_ports
+     Owner     : Network Security Team
+     Info      : v4.1 | Updated 2025-02-20
+     Quality   : structured  |  BM25: 51.6  |  Relevance: 97%
+     Matched   : APPROVED PORTS › REQUESTING A NEW PORT › BLOCKED PORTS
+     Path      : knowledge_base\connectivity_ports\port_registry.txt
+
+[5] port_host_quick_reference.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Application Port and Host Quick Reference
+     Folder    : connectivity_ports
+     Owner     : Platform Engineering Team
+     Info      : v1.0 | Updated 2025-05-01
+     Quality   : structured  |  BM25: 50.7  |  Relevance: 96%
+     Matched   : APPLICATION HOST AND PORT REFERENCE › PURPOSE › MANAGEMENT AND MONITORING HOSTS
+     Path      : knowledge_base\connectivity_ports\port_host_quick_reference.txt
+
+[6] parameter_reference_guide.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Application Parameter Reference Guide
+     Folder    : application_parameters
+     Owner     : Platform Engineering Team
+     Info      : v5.0 | Updated 2025-03-01
+     Quality   : structured  |  BM25: 34.8  |  Relevance: 87%
+     Matched   : PAYMENTS GATEWAY PARAMETERS › INTERDEPENDENCY NOTES › CORE BANKING SYSTEM (CBS) PARAMETERS
+     Path      : knowledge_base\application_parameters\parameter_reference_guide.txt

@@ -1,0 +1,254 @@
+ENTERPRISE KNOWLEDGE ASSISTANT v7 — QUERY OUTPUT
+=================================================================
+Query      : CBS is returning 503, what do I do?
+Intent     : SUMMARY
+Confidence : HIGH (93%)
+Sources    : 6 document(s)
+Timestamp  : 2026-05-18T11:38:53.580970
+=================================================================
+
+SUMMARY
+─────────────────────────────────────────────────────────────────
+────────────────────────────────────────
+[1] Slack Incident Thread Dec2024  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —
+
+  [[09:44] PAGERDUTY_BOT: ALERT - CBS health check failing - http://10.10.1.10:8080]
+    [09:44] PAGERDUTY_BOT: ALERT - CBS health check failing - http://10.10.1.10:8080/api/v2/health returning 503
+
+  [[09:47] platform_lead: CBS is returning 503. checking DB connection pool]
+    [09:47] platform_lead: CBS is returning 503. checking DB connection pool
+    CBS_DB_POOL_SIZE is 50, checking current connections
+
+  [[09:53] dba_team: done. CBS_DB_POOL_SIZE = 80 as emergency.]
+    [09:53] dba_team: done. CBS_DB_POOL_SIZE = 80 as emergency.
+    give it 2-3 min to take effect as existing connections drain.
+
+  [[10:00] dba_team: permanent fix approved. CBS_DB_POOL_SIZE = 100.]
+    [10:00] dba_team: permanent fix approved. CBS_DB_POOL_SIZE = 100.
+    adding monitoring alert at 80% pool utilisation.
+
+────────────────────────────────────────
+[2] Dba Runbook Notes  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —  |  Updated: march 2025
+
+  [PAYMENTS GATEWAY DB (PostgreSQL 14.2 on 10.10.1.21 port 5432)]
+    PAYMENTS GATEWAY DB (PostgreSQL 14.2 on 10.10.1.21 port 5432)
+    - connection pool managed by PgBouncer on 10.10.1.21:6432
+    - PG_BOUNCER_POOL_SIZE = 40 for payments db
+    - payments db stores transaction state. session state refactor is in progress for v2.9.0 LB work.
+    - if payments GW is throwing 503 and CBS is fine, check pgbouncer logs:
+    /var/log/pgbouncer/pgbouncer.log
+
+  [GENERAL DBA STUFF]
+    GENERAL DBA STUFF
+    - all production DB changes require DBA approval + CAB ticket
+    - emergency pool size changes can be approved by DBA team lead + platform lead (as happened in INC-2024-1201)
+    - read replicas exist for CBS and DWH (snowflake). use them for analytics.
+    - connection string format: postgresql://user:pass@host:port/dbname?sslmode=require
+    - all prod DBs require SSL. PGSSLMODE=require in application env.
+
+  [DATA WAREHOUSE (Snowflake - external SaaS)]
+    DATA WAREHOUSE (Snowflake - external SaaS)
+    - Snowflake account: company-prod.snowflakecomputing.com
+    - DWH_SNOWFLAKE_WAREHOUSE = COMPUTE_WH (medium, 2 clusters)
+    - Q1 2025 was 8% over Snowflake compute budget. data eng put query cost alerts in.
+    - ad-hoc queries over 1TB in the console = flag to data eng lead (dataeng@company.com)
+    - the fact_transactions table had a missing index after CBS v4.2.0 release (INC-2025-0288)
+    new column beneficiary_account_type was added but the index on it wasn't migrated.
+    DBA added: CREATE INDEX idx_fact_tx_ben_acct ON fact_transactions(beneficiary_account_type);
+    lesson: always check for missing indexes after a CBS release that touches transaction schema.
+
+  [CBS DATABASE (PostgreSQL 14.2 on 10.10.1.11 port 5432)]
+    CBS DATABASE (PostgreSQL 14.2 on 10.10.1.11 port 5432)
+    - CBS_DB_POOL_SIZE = 100 (was 50 before december 2024 incident INC-2024-1201)
+    the december incident was caused by pool exhaustion at peak december volume
+    quick math that platform_lead did in the slack thread: 500 TPS * 0.6s avg hold = 300 concurrent connections
+    we only had 50 slots. never again. now it's 100.
+    - zabbix alert fires at 80% pool utilisation (= 80 connections). that's the warning threshold.
+    if you get that alert and it's not december just check for a runaway query first.
+    - CBS postgres is on dedicated SSD RAID-10. do NOT run ad-hoc heavy queries on prod.
+    use the read replica at 10.10.1.12:5432 for reporting. the replica has a 30-60 sec lag.
+
+────────────────────────────────────────
+[3] Email Thread Engineering Decisions  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —
+
+  [yes CBS_DB_POOL_SIZE is now 100 (was 50, emergency change jan 8 2025 after the d]
+    yes CBS_DB_POOL_SIZE is now 100 (was 50, emergency change jan 8 2025 after the dec 22 incident).
+    DBA approved. if anyone wants to go above 150 they need formal DBA approval with impact analysis.
+    we now have connection monitoring - alert fires at 80% pool utilisation.
+    the december incident (INC-2024-1201) was because december peak volume (35% above normal)
+    exhausted the pool. connections were queuing then timing out. CBS returned 503 for 39 min.
+    22,000 transaction attempts failed. not our finest hour.
+
+  [FROM: data eng lead]
+    FROM: data eng lead
+    TO: platform eng lead, CBS team lead
+    SUBJECT: RE: RE: RE: CBS schema change notification process
+
+  [this came out of INC-2024-0892 (aug 2024) where CBS added beneficiary_account_ty]
+    this came out of INC-2024-0892 (aug 2024) where CBS added beneficiary_account_type
+    without telling us and the nightly ETL failed silently for 2 hours before anyone noticed.
+    regulatory report was 4 hours late. we notified the regulator and they accepted the delay
+    but it cant happen again.
+
+  [current consumer groups to never change without coordination:]
+    current consumer groups to never change without coordination:
+    - fraud-engine-cg-prod (fraud engine consuming fraud.transaction.events)
+    - whatever groups reporting-svc uses for cbs.account.updates
+
+────────────────────────────────────────
+[4] Parameter Notes From Call  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —
+
+  [PAYMENTS GATEWAY:]
+    PAYMENTS GATEWAY:
+    - PAYMENTS-GW_TXN_TIMEOUT = 30000ms (30 seconds). multiply by CBS_MAX_TXN_RETRY and you get
+    90 sec worst case for a transaction to fail completely.
+    - PAYMENTS-GW_MAX_PAYLOAD_SIZE_MB = 5.0. requests above this get HTTP 413.
+
+  [CORE BANKING (CBS) stuff:]
+    CORE BANKING (CBS) stuff:
+    - CBS_DB_POOL_SIZE was 50, is now 100 (fixed after the dec 2024 incident where we ran out of
+    connections during peak load). if you want to go above 150 you need DBA approval.
+    - CBS_SESSION_TIMEOUT_SEC = 1800 (30 min). PCI-DSS says minimum 900 seconds (15 min), max
+    3600 (60 min). dont go below 900 or youll fail the audit.
+    - CBS_BATCH_WINDOW_START = 23:00 - this is when EOD reconciliation kicks off. the DWH ETL
+    starts at 23:30 so there's a 30 min buffer. dont change these without telling data eng.
+    - CBS_MAX_TXN_RETRY = 3. dont set above 5 or you risk duplicate transactions.
+
+  [SWIFT:]
+    SWIFT:
+    - SWIFT_TIMEOUT_SEC = 120. SWIFT network usually responds in 30-90 sec.
+    - SWIFT_MAX_TRANSFER_LIMIT_USD = 5,000,000. above this needs manual compliance approval before
+    SWIFT-ADAPTER will process it.
+
+  [FRAUD ENGINE stuff:]
+    FRAUD ENGINE stuff:
+    - FRAUD_REDIS_TTL_SEC is currently 3600 (one hour). DO NOT change this without platform eng
+    sign off. when risk tech changed it to 300 in dec 2024 redis ran out of memory and we had
+    a 138 min outage. the redis memory limit is 32GB and at 300sec TTL we were writing 12x more
+    frequently than the memory could handle.
+    - FRAUD_MODEL_VERSION is currently v3.2.1 (was briefly v3.3.0 but that got rolled back because
+    of the NaN bug with null merchant codes). v3.4.0 is coming in may 2025.
+    - FRAUD_KAFKA_CONSUMER_GROUP = "fraud-engine-cg-prod" - if you change this it resets the
+    kafka offset and reprocesses all historical messages. bad idea in prod. coordinate first.
+    - PAYMENTS-GW_FRAUD_THRESHOLD = 0.75 by default. if you lower it you get more false positives
+    (legitimate payments getting blocked). if risk tech wants to change this they need to tell
+    platform eng and payments team first.
+
+────────────────────────────────────────
+[5] Analyst Faq  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —  |  Updated: may 2025
+
+  [Q: what is CBS?]
+    Q: what is CBS?
+    A: Core Banking System. It's the mainframe-era system that holds all account data, balances, and
+    transaction history. When people say "the core", "the mainframe", or "account system" they mean CBS.
+    Host: 10.10.1.10, Port: 8080. API endpoint: http://10.10.1.10:8080/api/v2/
+    CBS is owned by the CBS team (cbs-ops@company.com). Platform eng does the infra.
+
+  [Q: what is the december freeze?]
+    Q: what is the december freeze?
+    A: After INC-2024-1201 (CBS pool exhaustion at december peak volume), the CTO approved a policy:
+    no production releases December 1-31. The december period has 35% above normal transaction volume.
+    Changes to cope with december (like CBS_DB_POOL_SIZE = 100) are done in October/November.
+    December capacity review is now scheduled for October 2025.
+
+  [Q: what is the SLA for CBS / payments?]
+    Q: what is the SLA for CBS / payments?
+    A: CBS SLA: 99.9% availability (target), 99.87% actual Q1 2025 (below target due to INC-2024-1201)
+    Payments GW SLA: 99.95% target, 99.91% actual Q1 2025
+    Full SLA register is in sla_register_and_actuals.txt in the knowledge base.
+
+  [Q: what's the difference between CBS and Payments Gateway?]
+    Q: what's the difference between CBS and Payments Gateway?
+    A: CBS is the backend account ledger. Payments Gateway (PAYMENTS-GW) is the transaction processor.
+    When a payment happens: Payments GW receives it → calls Fraud Engine for a risk score →
+    calls CBS to debit/credit the accounts → returns confirmation.
+    CBS doesn't talk to the outside world. Payments GW does.
+    PAYMENTS-GW host: 10.10.1.20, Port: 9000.
+
+─────────────────────────────────────────────────────────────────
+CONFIDENCE: ✓ HIGH  ██████████  (93%)
+─────────────────────────────────────────────────────────────────
+  • Strong: 6 documents matched the query
+  • Strong relevance score (39.6)
+  • Top source clearly dominant — high specificity
+  • 2 of top sources are well-structured documents
+  • Partial query term match (1 terms found)
+
+─────────────────────────────────────────────────────────────────
+RELATED QUESTIONS
+─────────────────────────────────────────────────────────────────
+  1. What was the full root cause and remediation for INC-2024-1201?
+  2. What is the current capacity and SLA status of CBS?
+  3. What happens if PAGERDUTY_BOT is changed without CAB approval?
+
+─────────────────────────────────────────────────────────────────
+REFERENCES  —  open source files for complete detail
+─────────────────────────────────────────────────────────────────
+[1] slack_incident_thread_dec2024.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Slack Incident Thread Dec2024
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : structured  |  BM25: 39.6  |  Relevance: 100%
+     Matched   : [09:44] PAGERDUTY_BOT: ALERT - CBS health check failing - http://10.10.1.10:8080 › [09:47] platform_lead: CBS is returning 503. checking DB connection pool › [09:53] dba_team: done. CBS_DB_POOL_SIZE = 80 as emergency.
+     Path      : knowledge_base\unstructured_samples\slack_incident_thread_dec2024.txt
+
+[2] dba_runbook_notes_informal.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Dba Runbook Notes
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated march 2025
+     Quality   : partial  |  BM25: 29.9  |  Relevance: 92%
+     Matched   : PAYMENTS GATEWAY DB (PostgreSQL 14.2 on 10.10.1.21 port 5432) › GENERAL DBA STUFF › DATA WAREHOUSE (Snowflake - external SaaS)
+     ℹ Note    : Partially structured — some metadata inferred from filename/folder
+     Path      : knowledge_base\unstructured_samples\dba_runbook_notes_informal.txt
+
+[3] email_thread_engineering_decisions.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Email Thread Engineering Decisions
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : structured  |  BM25: 27.8  |  Relevance: 90%
+     Matched   : yes CBS_DB_POOL_SIZE is now 100 (was 50, emergency change jan 8 2025 after the d › FROM: data eng lead › this came out of INC-2024-0892 (aug 2024) where CBS added beneficiary_account_ty
+     Path      : knowledge_base\unstructured_samples\email_thread_engineering_decisions.txt
+
+[4] parameter_notes_from_call.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Parameter Notes From Call
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : unstructured  |  BM25: 25.3  |  Relevance: 88%
+     Matched   : PAYMENTS GATEWAY: › CORE BANKING (CBS) stuff: › SWIFT:
+     ⚠ Note    : Unstructured doc — no formal metadata, verify content manually
+     Path      : knowledge_base\unstructured_samples\parameter_notes_from_call.txt
+
+[5] new_analyst_faq.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Analyst Faq
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated may 2025
+     Quality   : structured  |  BM25: 25.3  |  Relevance: 88%
+     Matched   : Q: what is CBS? › Q: what is the december freeze? › Q: what is the SLA for CBS / payments?
+     Path      : knowledge_base\unstructured_samples\new_analyst_faq.txt
+
+[6] oncall_handover_notes_may2025.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Oncall Handover Notes May2025
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : unstructured  |  BM25: 25.2  |  Relevance: 88%
+     Matched   : CONTACTS THIS WEEKEND: › THINGS THAT WERE WEIRD THIS WEEK: › OPEN ITEMS:
+     ⚠ Note    : Unstructured doc — no formal metadata, verify content manually
+     Path      : knowledge_base\unstructured_samples\oncall_handover_notes_may2025.txt

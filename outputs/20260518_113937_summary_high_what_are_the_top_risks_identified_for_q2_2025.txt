@@ -1,0 +1,274 @@
+ENTERPRISE KNOWLEDGE ASSISTANT v7 — QUERY OUTPUT
+=================================================================
+Query      : What are the top risks identified for Q2 2025?
+Intent     : SUMMARY
+Confidence : HIGH (77%)
+Sources    : 6 document(s)
+Timestamp  : 2026-05-18T11:39:37.836474
+=================================================================
+
+SUMMARY
+─────────────────────────────────────────────────────────────────
+────────────────────────────────────────
+[1] Operations Troubleshooting Runbook  [.TXT]
+  Topic  : Troubleshooting, Incident Response, Common Errors
+  Owner  : Platform Engineering Team  |  v6.2  |  Updated: 2025-05-17
+
+  [ISSUE: Reporting Service slow — timeout on report generation]
+    STEPS:
+    1. Check DWH query performance — review query plan in Snowflake console.
+    2. Verify ETL-001 completed — stale DWH data causes report retries.
+    3. Check resource usage: ssh 10.10.1.40, run top or htop.
+    4. Check if CBS_BATCH_WINDOW_START overlaps with RPT-001 start time (I/O contention).
+    ESCALATE: bi-ops@company.com
+
+  [ISSUE: Fraud Engine high false positives blocking legitimate payments]
+    STEPS:
+    1. Verify PAYMENTS-GW_FRAUD_THRESHOLD. Default 0.75. Lower value blocks more payments.
+    2. Check FRAUD_MODEL_VERSION — if recently updated, model may need recalibration.
+    3. Check FRAUD_REDIS_TTL_SEC — stale cached scores can cause issues.
+    4. Flush Redis cache if stale scores suspected (coordinate with Risk Tech team first):
+    redis-cli -h 10.10.1.30 -p 6379 FLUSHDB
+    5. Review logs: /var/log/fraud-engine/scoring.log
+    ESCALATE: risktech@company.com
+
+  [ISSUE: Payments Gateway not processing — HTTP 503/504]
+    STEPS:
+    1. Check health: GET http://10.10.1.20:9000/payments/health (expected: status ok)
+    2. SSH to 10.10.1.20 from MGMT-NET. Check: systemctl status payments-gw
+    3. Check FRAUD-ENGINE: curl http://10.10.1.30:8500/fraud/score/health
+    PAYMENTS-GW calls FRAUD-ENGINE synchronously. If Fraud Engine is down, payments are blocked.
+    4. Check CBS: curl http://10.10.1.10:8080/api/v2/health
+    5. Review logs: /var/log/payments-gw/app.log — look for ConnectionRefused or Timeout errors.
+    ESCALATE: If unresolved 15 minutes, page PAYMENTS-ONCALL (PagerDuty).
+
+  [ISSUE: ETL-001 job failed — DWH showing stale data]
+    STEPS:
+    1. Check Airflow at http://10.10.50.30:8081 — find dag_cbs_to_dwh, review task logs.
+    2. Common cause 1: EOD-001 did not complete. Check if /data/exports/eod/YYYYMMDD_eod.csv exists.
+    3. Common cause 2: Snowflake DWH unreachable. Test connectivity from ETL host.
+    4. Common cause 3: Schema mismatch — CBS added column not mapped. Check logs for KeyError.
+    5. Manual re-trigger: In Airflow UI, clear and re-run dag_cbs_to_dwh for the failed date.
+    ESCALATE: Data Engineering on-call if retry fails (PagerDuty: DE-ONCALL).
+
+────────────────────────────────────────
+[2] Disaster Recovery and Business Continuity Plan  [.TXT]
+  Topic  : DR, BCP, Failover, Recovery
+  Owner  : Platform Engineering Team  |  v1.8  |  Updated: 2025-01-20
+
+  [DR TEST SCHEDULE]
+    Full DR drill: Annually in Q4 (October)
+    Partial Tier 1 test: Q2 each year
+    Results reviewed by Risk Committee.
+
+  [DR SITE CONFIGURATION]
+    Primary Site: DC-WEST (10.10.x.x subnet)
+    DR Site: DC-EAST (10.20.x.x subnet)
+    Tier 1 applications maintain hot-standby at DC-EAST.
+    Database replication: Oracle Data Guard (CBS), PostgreSQL streaming (AUTH-SVC, PAYMENTS-GW).
+    Replication lag must stay below 60 seconds.
+    DR DNS Failover: AWS Route 53, health checks, TTL 60 seconds.
+    Automatic failover for Tier 1 only.
+
+  [APPLICATION TIERS]
+    TIER 1 - Critical (RTO 4 hours, RPO 1 hour):
+    - CBS (Core Banking System)
+    - AUTH-SVC
+    - PAYMENTS-GW
+    TIER 2 - Important (RTO 8 hours, RPO 4 hours):
+    - FRAUD-ENGINE
+    - REPORTING-SVC
+    - SWIFT-ADAPTER
+    TIER 3 - Standard (RTO 24 hours, RPO 24 hours):
+    - DATA-WAREHOUSE
+    - Airflow Orchestration
+    - Monitoring Tools (Zabbix)
+
+────────────────────────────────────────
+[3] Email Thread Engineering Decisions  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —
+
+  [implementation starts Q2 2025 in auth-svc v1.6.0 (june). vault secrets integrati]
+    implementation starts Q2 2025 in auth-svc v1.6.0 (june). vault secrets integration is part
+    of same release.
+
+  [just to document what we learnt from the march 2025 incident (INC-2025-0203, v3.]
+    just to document what we learnt from the march 2025 incident (INC-2025-0203, v3.3.0):
+    - never merge a feature flag mechanism without comprehensive null testing
+    - PAYMENTS-GW_FRAUD_THRESHOLD comparison with NaN evaluates to False in python
+    - this means null merchant code = no fraud check = transaction goes through
+    - 1800 transactions were unscored, 3 were actual fraud, $4200 exposure
+    - we rolled back to v3.2.1 same night (REL-2025-009)
+    - v3.3.1 fixed with null-safe comparison and added unit test for null inputs
+
+  [yes CBS_DB_POOL_SIZE is now 100 (was 50, emergency change jan 8 2025 after the d]
+    yes CBS_DB_POOL_SIZE is now 100 (was 50, emergency change jan 8 2025 after the dec 22 incident).
+    DBA approved. if anyone wants to go above 150 they need formal DBA approval with impact analysis.
+    we now have connection monitoring - alert fires at 80% pool utilisation.
+    the december incident (INC-2024-1201) was because december peak volume (35% above normal)
+    exhausted the pool. connections were queuing then timing out. CBS returned 503 for 39 min.
+    22,000 transaction attempts failed. not our finest hour.
+
+  [new rule: fraud score null rate >1% in first 15 min post-deploy triggers auto-ro]
+    new rule: fraud score null rate >1% in first 15 min post-deploy triggers auto-rollback
+
+────────────────────────────────────────
+[4] Fraud Model Deployment Notes  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —  |  Updated: april 2025
+
+  [MODEL VERSIONING]
+    MODEL VERSIONING
+    current production model: v3.2.1 (deployed Q4 2024)
+    next deploy: v3.4.0 - scheduled may 8 2025 (Q2 quarterly retrain)
+    accuracy: 96.8% on holdout set (threshold = 95.0%, must pass to deploy)
+    false positive rate: 0.8% (acceptable threshold = 1.5%)
+    null rate gate: if null rate exceeds 1% in first 15 min post-deploy, auto-rollback triggers
+
+  [fraud model deployment notes - internal - risk tech team]
+    fraud model deployment notes - internal - risk tech team
+    compiled by: risk tech lead
+    covers: fraud-engine model versioning, deployment gates, known constraints
+    last updated: april 2025
+
+  [MODEL PARAMETER CONSTRAINTS]
+    MODEL PARAMETER CONSTRAINTS
+    FRAUD_MODEL_VERSION = "3.2.1" (in env, updated by deploy script)
+    FRAUD_SCORE_THRESHOLD = 0.75 (scores above this trigger fraud hold)
+    - DO NOT change this without risk committee approval
+    - last changed: Q3 2023 after false positive rate review
+    FRAUD_KAFKA_CONSUMER_GROUP = "fraud-scoring-cg-prod" (do not rename, kafka offset tracking depends on this)
+    if you rename the consumer group, offset tracking is lost and the fraud engine will reprocess
+    every message in the partition from the beginning. this caused INC-2024-0991 in september 2024.
+    FRAUD_REDIS_TTL_SEC = 3600
+    - redis cache TTL for fraud score results. set to 3600 by platform eng.
+    - risk tech has requested reducing to 1800 for Q2 to improve freshness of repeat transaction scoring
+    - platform eng said NO until redis auto-scaling is confirmed (sentinel config done, load test pending)
+    - do NOT change this even if risk tech asks. they know the constraint.
+    FRAUD_BATCH_SIZE = 500 (kafka consumer batch size)
+    FRAUD_MAX_RETRIES = 3 (retry on scoring failure before dead-letter queue)
+
+  [KNOWN ISSUES AND GOTCHAS]
+    KNOWN ISSUES AND GOTCHAS
+    - FRAUD_REDIS_TTL_SEC sensitivity: lower TTL = more cache misses = higher latency on payments GW
+    at 900 TTL, payments GW latency spiked from 120ms to 380ms in load test (jan 2025)
+    this is why platform eng wont reduce TTL until auto-scaling is proven
+    - kafka consumer group rename caused INC-2024-0991 (offset reset, reprocessing backlog)
+    rule: FRAUD_KAFKA_CONSUMER_GROUP is immutable in prod
+    - model warm-up: fraud engine needs 3-5 minutes after deploy before scoring performance stabilises
+    during warm-up, FRAUD_SCORE_THRESHOLD is temporarily raised to 0.85 to reduce false positives
+    this is handled automatically by the deploy script. dont panic if you see fewer holds in first 5 min.
+    - v3.4.0 specifically: the new model uses an updated feature vector that includes beneficiary_account_type
+    this field comes from CBS via the payments gateway. CBS v4.2.0+ is required for this field to be present.
+    CBS is already on v4.2.1 in prod so this dependency is met. just noting it.
+
+────────────────────────────────────────
+[5] Security Team Notes  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —  |  Updated: march 2025
+
+  [SECURITY ROADMAP (Q2/Q3 2025)]
+    SECURITY ROADMAP (Q2/Q3 2025)
+    - LDAP → LDAPS migration (port 389 → 636): Q3 2025
+    - TLS 1.2 minimum enforcement: Q2 2025
+    - Keycloak 23.x upgrade: Q3 2025
+    - SWIFT cert renewal (expires 2025-09-30): must complete by August 2025
+
+  [security notes - platform security team - internal]
+    security notes - platform security team - internal
+    compiled by: security ops lead
+    last updated: march 2025
+    classification: internal only - do not distribute outside platform teams
+
+  [RECENT SECURITY EVENTS]
+    RECENT SECURITY EVENTS
+    - december 2024: QRadar alert on unusual payment amounts from single account
+    investigated by risk tech: test account not correctly flagged as test. false positive.
+    account correctly flagged now. no fraud detected.
+    - february 2025: external pen test completed. no critical findings.
+    medium findings: LDAP plaintext (port 389) flagged - migration to LDAPS scheduled Q3 2025
+    low findings: some internal services not enforcing TLS 1.2+ minimum - remediation in progress
+
+  [ESCALATION]
+    ESCALATION
+    - security incidents: security-ops@company.com + PagerDuty security rotation (24/7)
+    - cert issues: security-ops@company.com (business hours) / PagerDuty (after hours if cert expired)
+    - auth-svc production issues: security-ops@company.com + platform-eng@company.com simultaneously
+
+─────────────────────────────────────────────────────────────────
+CONFIDENCE: ✓ HIGH  ██████████  (77%)
+─────────────────────────────────────────────────────────────────
+  • Strong: 6 documents matched the query
+  • Strong relevance score (17.0)
+  • Some score differentiation between sources
+  • 3 of top sources are well-structured documents
+  • No exact query terms — synonym or semantic match
+
+─────────────────────────────────────────────────────────────────
+RELATED QUESTIONS
+─────────────────────────────────────────────────────────────────
+  1. What was the full root cause and remediation for INC-2025-0203?
+  2. What is the current capacity and SLA status of DWH?
+  3. What happens if ENGINE is changed without CAB approval?
+
+─────────────────────────────────────────────────────────────────
+REFERENCES  —  open source files for complete detail
+─────────────────────────────────────────────────────────────────
+[1] operations_runbook.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Operations Troubleshooting Runbook
+     Folder    : troubleshooting
+     Owner     : Platform Engineering Team
+     Info      : v6.2 | Updated 2025-05-17
+     Quality   : structured  |  BM25: 17.0  |  Relevance: 99%
+     Matched   : ISSUE: Reporting Service slow — timeout on report generation › ISSUE: Fraud Engine high false positives blocking legitimate payments › ISSUE: Payments Gateway not processing — HTTP 503/504
+     Path      : knowledge_base\troubleshooting\operations_runbook.txt
+
+[2] disaster_recovery_plan.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Disaster Recovery and Business Continuity Plan
+     Folder    : network_architecture
+     Owner     : Platform Engineering Team
+     Info      : v1.8 | Updated 2025-01-20
+     Quality   : structured  |  BM25: 16.5  |  Relevance: 99%
+     Matched   : DR TEST SCHEDULE › DR SITE CONFIGURATION › APPLICATION TIERS
+     Path      : knowledge_base\network_architecture\disaster_recovery_plan.txt
+
+[3] email_thread_engineering_decisions.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Email Thread Engineering Decisions
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : structured  |  BM25: 15.7  |  Relevance: 97%
+     Matched   : implementation starts Q2 2025 in auth-svc v1.6.0 (june). vault secrets integrati › just to document what we learnt from the march 2025 incident (INC-2025-0203, v3. › yes CBS_DB_POOL_SIZE is now 100 (was 50, emergency change jan 8 2025 after the d
+     Path      : knowledge_base\unstructured_samples\email_thread_engineering_decisions.txt
+
+[4] fraud_model_deployment_notes.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Fraud Model Deployment Notes
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated april 2025
+     Quality   : structured  |  BM25: 15.5  |  Relevance: 97%
+     Matched   : MODEL VERSIONING › fraud model deployment notes - internal - risk tech team › MODEL PARAMETER CONSTRAINTS
+     Path      : knowledge_base\unstructured_samples\fraud_model_deployment_notes.txt
+
+[5] security_team_notes.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Security Team Notes
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated march 2025
+     Quality   : structured  |  BM25: 15.4  |  Relevance: 96%
+     Matched   : SECURITY ROADMAP (Q2/Q3 2025) › security notes - platform security team - internal › RECENT SECURITY EVENTS
+     Path      : knowledge_base\unstructured_samples\security_team_notes.txt
+
+[6] platform_eng_q1_retro_notes.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Platform Eng Q1 Retro Notes
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : structured  |  BM25: 15.0  |  Relevance: 96%
+     Matched   : RISK 2: redis auto-scaling not confirmed for fraud engine › RISK 3: kafka tiered storage not scheduled › platform engineering retro - q1 2025 - internal notes
+     Path      : knowledge_base\unstructured_samples\platform_eng_q1_retro_notes.txt

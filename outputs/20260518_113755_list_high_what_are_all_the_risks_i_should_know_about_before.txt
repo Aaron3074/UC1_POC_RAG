@@ -1,0 +1,449 @@
+ENTERPRISE KNOWLEDGE ASSISTANT v7 — QUERY OUTPUT
+=================================================================
+Query      : What are all the risks I should know about before approving the fraud engine v3.4.0 release?
+Intent     : LIST
+Confidence : HIGH (100%)
+Sources    : 6 document(s)
+Timestamp  : 2026-05-18T11:37:55.631995
+=================================================================
+
+RESULTS
+─────────────────────────────────────────────────────────────────
+
+  [1] [oncall_handover_notes_may2025.txt  .TXT]
+    • INC-2025-0044 was caused by this exact thing in january.
+    • INC-2025-0288 was filed for this.
+
+─────────────────────────────────────────────────────────────────
+ADDITIONAL RISK CONTEXT FROM DOCUMENTS
+─────────────────────────────────────────────────────────────────
+Query: What are all the risks I should know about before approving the fraud engine v3.4.0 release?
+
+FINDINGS BY SOURCE
+────────────────────────────────────────
+
+[1] Oncall Handover Notes May2025  [.TXT]  [unstructured_samples]
+  Owner: —  |  Updated: —
+
+  [- redis auto-scaling for fraud engine. sentinel config is done. load testing is ]
+    - redis auto-scaling for fraud engine. sentinel config is done. load testing is next week.
+    FRAUD_REDIS_TTL_SEC is locked at 3600 until auto-scaling is confirmed. do NOT change this.
+    any request from risk tech to reduce TTL needs platform eng co-approval. they know this.
+
+  [SCHEDULED THIS WEEKEND:]
+    SCHEDULED THIS WEEKEND:
+    - fraud model v3.4.0 is deploying thursday may 8. this is the Q2 quarterly model retrain.
+    new model tested at 96.8% accuracy (above 95% threshold). null rate gate is in place now.
+    if null rate exceeds 1% in first 15 min post-deploy, pipeline auto-rollbacks to v3.2.1.
+    risk tech team is monitoring. dont need to do anything unless pagerduty fires.
+    - NO other releases this weekend. may 15 is next release window (payments v2.9.0 if LB refactor done).
+
+  [THINGS THAT WERE WEIRD THIS WEEK:]
+    THINGS THAT WERE WEIRD THIS WEEK:
+    - tuesday: got a SIEM alert from QRadar about unusual payment amounts for one account.
+    risk tech investigated - turned out to be a test account that was accidentally not flagged.
+    no actual fraud. account flagged now.
+    - wednesday: reporting SVC was slow at about 09:30. took ~8 min to generate the LCR report.
+    checked DWH - turned out there was a missing index on fact_transactions from the CBS v4.2.0
+    release (new beneficiary_account_type column). DBA added the index. should be fine now.
+    INC-2025-0288 was filed for this.
+
+  [CONTACTS THIS WEEKEND:]
+    CONTACTS THIS WEEKEND:
+    - CBS issues: cbs-ops@company.com or CBS manager on PagerDuty
+    - Fraud/model: risktech@company.com - they're monitoring the may 8 deploy
+    - anything critical: platform-eng@company.com / PE-ONCALL
+
+
+[2] Analyst Question Log  [.TXT]  [unstructured_samples]
+  Owner: —  |  Updated: —
+
+  [---]
+    ---
+    Q: how do i know if the fraud model is performing well after an update?
+    A: check FRAUD_MODEL_VERSION first to confirm which version is active.
+    model performance metrics are in the fraud engine ML dashboard (risk tech team has access).
+    key metric: null score rate. if null rate exceeds 1% post-deploy, auto-rollback fires.
+    after the v3.3.0 incident (march 2025) where null merchant codes bypassed fraud checks,
+    we added automated null rate gate in the deployment pipeline.
+    if you see legitimate payments being blocked at unusual rates: PAYMENTS-GW_FRAUD_THRESHOLD
+    is 0.75 by default. any change requires Risk Tech + Payments Team sign-off + CAB.
+
+  [---]
+    ---
+    Q: can i query the kafka topics directly?
+    A: depends on your role. if youre on MGMT-NET you can use kafka-console-consumer but be careful.
+    do NOT change or commit offsets manually. do NOT reset the consumer group (FRAUD_KAFKA_CONSUMER_GROUP).
+    resetting the consumer group on fraud.transaction.events would cause the fraud engine to
+    reprocess 7 days worth of transactions - millions of events - and overwhelm the system.
+    if you need to inspect a topic for debugging, read-only consumer is fine, just dont touch offsets.
+
+  [---]
+    ---
+    Q: the payments portal shows "service temporarily unavailable". what does that mean?
+    A: most likely one of: payments GW is down, fraud engine is down (payments GW calls it
+    synchronously), or CBS is down. check in that order:
+    curl http://10.10.1.20:9000/payments/health
+    curl http://10.10.1.30:8500/fraud/score/health
+    curl http://10.10.1.10:8080/api/v2/health
+    if you cant reach any of them, youre not on MGMT-NET. need VPN.
+
+  [---]
+    ---
+    Q: how do i get access to the fraud engine dashboards?
+    A: you need the risk-analyst role in keycloak. submit a ServiceNow access request ticket
+    (type: Access Request). your manager needs to approve, then security team provisions it.
+    SLA is 2 business days. if urgent for an investigation, security team can do same-day
+    with manager email approval. contact security-ops@company.com.
+
+
+[3] Email Thread Engineering Decisions  [.TXT]  [unstructured_samples]
+  Owner: —  |  Updated: —
+
+  [current consumer groups to never change without coordination:]
+    current consumer groups to never change without coordination:
+    - fraud-engine-cg-prod (fraud engine consuming fraud.transaction.events)
+    - whatever groups reporting-svc uses for cbs.account.updates
+
+  [just a reminder - do NOT change FRAUD_KAFKA_CONSUMER_GROUP or any other kafka co]
+    just a reminder - do NOT change FRAUD_KAFKA_CONSUMER_GROUP or any other kafka consumer group
+    ID in production without coordinating with the owning team first. changing the consumer group
+    resets the kafka offset to the beginning of the topic. for fraud.transaction.events (12 partitions,
+    7 day retention) this means reprocessing potentially millions of historical payment events.
+    this would overwhelm the fraud engine. not good. coordinate first. always.
+
+  [just to document what we learnt from the march 2025 incident (INC-2025-0203, v3.]
+    just to document what we learnt from the march 2025 incident (INC-2025-0203, v3.3.0):
+    - never merge a feature flag mechanism without comprehensive null testing
+    - PAYMENTS-GW_FRAUD_THRESHOLD comparison with NaN evaluates to False in python
+    - this means null merchant code = no fraud check = transaction goes through
+    - 1800 transactions were unscored, 3 were actual fraud, $4200 exposure
+    - we rolled back to v3.2.1 same night (REL-2025-009)
+    - v3.3.1 fixed with null-safe comparison and added unit test for null inputs
+
+  [1. any new column added to CBS transaction table must be notified to data eng BE]
+    1. any new column added to CBS transaction table must be notified to data eng BEFORE deployment
+    2. use the #schema-changes slack channel
+    3. data eng gets minimum 3 days notice to update ETL mappings
+    4. CBS release checklist now has a mandatory field: "data eng notified Y/N"
+    5. if not notified and ETL breaks, CBS team owns the P1 response
+
+
+[4] Dba Runbook Notes  [.TXT]  [unstructured_samples]
+  Owner: —  |  Updated: march 2025
+
+  [REDIS CACHES]
+    REDIS CACHES
+    - Fraud engine Redis: 10.10.1.31 port 6379 (Sentinel managed)
+    FRAUD_REDIS_TTL_SEC = 3600 (do NOT change without platform eng co-approval)
+    sentinel config done, auto-scaling load test scheduled for may 2025
+    - Auth session Redis: 10.10.1.51 port 6379
+    AUTH_TOKEN_EXPIRY_SEC = 900 (15 min session tokens)
+    AUTH_REFRESH_TOKEN_EXPIRY_SEC = 86400 (24 hr refresh tokens)
+    if users are getting logged out too fast, check this value first.
+
+  [DATA WAREHOUSE (Snowflake - external SaaS)]
+    DATA WAREHOUSE (Snowflake - external SaaS)
+    - Snowflake account: company-prod.snowflakecomputing.com
+    - DWH_SNOWFLAKE_WAREHOUSE = COMPUTE_WH (medium, 2 clusters)
+    - Q1 2025 was 8% over Snowflake compute budget. data eng put query cost alerts in.
+    - ad-hoc queries over 1TB in the console = flag to data eng lead (dataeng@company.com)
+    - the fact_transactions table had a missing index after CBS v4.2.0 release (INC-2025-0288)
+    new column beneficiary_account_type was added but the index on it wasn't migrated.
+    DBA added: CREATE INDEX idx_fact_tx_ben_acct ON fact_transactions(beneficiary_account_type);
+    lesson: always check for missing indexes after a CBS release that touches transaction schema.
+
+  [GENERAL DBA STUFF]
+    GENERAL DBA STUFF
+    - all production DB changes require DBA approval + CAB ticket
+    - emergency pool size changes can be approved by DBA team lead + platform lead (as happened in INC-2024-1201)
+    - read replicas exist for CBS and DWH (snowflake). use them for analytics.
+    - connection string format: postgresql://user:pass@host:port/dbname?sslmode=require
+    - all prod DBs require SSL. PGSSLMODE=require in application env.
+
+  [CBS DATABASE (PostgreSQL 14.2 on 10.10.1.11 port 5432)]
+    CBS DATABASE (PostgreSQL 14.2 on 10.10.1.11 port 5432)
+    - CBS_DB_POOL_SIZE = 100 (was 50 before december 2024 incident INC-2024-1201)
+    the december incident was caused by pool exhaustion at peak december volume
+    quick math that platform_lead did in the slack thread: 500 TPS * 0.6s avg hold = 300 concurrent connections
+    we only had 50 slots. never again. now it's 100.
+    - zabbix alert fires at 80% pool utilisation (= 80 connections). that's the warning threshold.
+    if you get that alert and it's not december just check for a runaway query first.
+    - CBS postgres is on dedicated SSD RAID-10. do NOT run ad-hoc heavy queries on prod.
+    use the read replica at 10.10.1.12:5432 for reporting. the replica has a 30-60 sec lag.
+
+
+[5] Fraud Model Deployment Notes  [.TXT]  [unstructured_samples]
+  Owner: —  |  Updated: april 2025
+
+  [MODEL PARAMETER CONSTRAINTS]
+    MODEL PARAMETER CONSTRAINTS
+    FRAUD_MODEL_VERSION = "3.2.1" (in env, updated by deploy script)
+    FRAUD_SCORE_THRESHOLD = 0.75 (scores above this trigger fraud hold)
+    - DO NOT change this without risk committee approval
+    - last changed: Q3 2023 after false positive rate review
+    FRAUD_KAFKA_CONSUMER_GROUP = "fraud-scoring-cg-prod" (do not rename, kafka offset tracking depends on this)
+    if you rename the consumer group, offset tracking is lost and the fraud engine will reprocess
+    every message in the partition from the beginning. this caused INC-2024-0991 in september 2024.
+    FRAUD_REDIS_TTL_SEC = 3600
+    - redis cache TTL for fraud score results. set to 3600 by platform eng.
+    - risk tech has requested reducing to 1800 for Q2 to improve freshness of repeat transaction scoring
+    - platform eng said NO until redis auto-scaling is confirmed (sentinel config done, load test pending)
+    - do NOT change this even if risk tech asks. they know the constraint.
+    FRAUD_BATCH_SIZE = 500 (kafka consumer batch size)
+    FRAUD_MAX_RETRIES = 3 (retry on scoring failure before dead-letter queue)
+
+  [fraud model deployment notes - internal - risk tech team]
+    fraud model deployment notes - internal - risk tech team
+    compiled by: risk tech lead
+    covers: fraud-engine model versioning, deployment gates, known constraints
+    last updated: april 2025
+
+  [KNOWN ISSUES AND GOTCHAS]
+    KNOWN ISSUES AND GOTCHAS
+    - FRAUD_REDIS_TTL_SEC sensitivity: lower TTL = more cache misses = higher latency on payments GW
+    at 900 TTL, payments GW latency spiked from 120ms to 380ms in load test (jan 2025)
+    this is why platform eng wont reduce TTL until auto-scaling is proven
+    - kafka consumer group rename caused INC-2024-0991 (offset reset, reprocessing backlog)
+    rule: FRAUD_KAFKA_CONSUMER_GROUP is immutable in prod
+    - model warm-up: fraud engine needs 3-5 minutes after deploy before scoring performance stabilises
+    during warm-up, FRAUD_SCORE_THRESHOLD is temporarily raised to 0.85 to reduce false positives
+    this is handled automatically by the deploy script. dont panic if you see fewer holds in first 5 min.
+    - v3.4.0 specifically: the new model uses an updated feature vector that includes beneficiary_account_type
+    this field comes from CBS via the payments gateway. CBS v4.2.0+ is required for this field to be present.
+    CBS is already on v4.2.1 in prod so this dependency is met. just noting it.
+
+  [ESCALATION]
+    ESCALATION
+    - fraud model scoring issues: risktech@company.com (24/7 on-call during model deploy window)
+    - platform/infrastructure issues during fraud deploy: platform-eng@company.com / PE-ONCALL
+    - if auto-rollback triggers and you need manual intervention: page both teams simultaneously
+
+────────────────────────────────────────
+KEY METRICS AND DATA POINTS
+
+  • - kafka broker-2 disk usage was at 67% last check (10.10.1.71). not urgent but watch it.
+      [1] [oncall_handover_notes_may2025.txt]
+  • if it hits 80% the zabbix alert fires. just restart the log compaction job if needed:
+      [1] [oncall_handover_notes_may2025.txt]
+  • - snowflake cost - Q1 was 8% over budget. data eng put query cost alerts in place.
+      [1] [oncall_handover_notes_may2025.txt]
+  • if you see any ad-hoc queries over 1TB in the snowflake console flag to data eng lead.
+      [1] [oncall_handover_notes_may2025.txt]
+  • new model tested at 96.8% accuracy (above 95% threshold). null rate gate is in place now.
+      [1] [oncall_handover_notes_may2025.txt]
+  • if null rate exceeds 1% in first 15 min post-deploy, pipeline auto-rollbacks to v3.2.1.
+      [1] [oncall_handover_notes_may2025.txt]
+  • - wednesday: reporting SVC was slow at about 09:30. took ~8 min to generate the LCR report.
+      [1] [oncall_handover_notes_may2025.txt]
+  • reprocess 7 days worth of transactions - millions of events - and overwhelm the system.
+      [2] [analyst_question_log.txt]
+  • time-limited to 90 days, all sessions recorded via PAM. not something we give out easily.
+      [2] [analyst_question_log.txt]
+  • in 99% of cases you should be using the application APIs or the DWH for data access.
+      [2] [analyst_question_log.txt]
+  • Q: the auth service was down for 47 minutes in may 2024. what happened?
+      [2] [analyst_question_log.txt]
+  • to its database. since ALL apps validate tokens against AUTH-SVC, 100% of user sessions
+      [2] [analyst_question_log.txt]
+  • key metric: null score rate. if null rate exceeds 1% post-deploy, auto-rollback fires.
+      [2] [analyst_question_log.txt]
+  • we now have connection monitoring - alert fires at 80% pool utilisation.
+      [3] [email_thread_engineering_decisions.txt]
+  • the december incident (INC-2024-1201) was because december peak volume (35% above normal)
+      [3] [email_thread_engineering_decisions.txt]
+  • exhausted the pool. connections were queuing then timing out. CBS returned 503 for 39 min.
+      [3] [email_thread_engineering_decisions.txt]
+  • new rule: fraud score null rate >1% in first 15 min post-deploy triggers auto-rollback
+      [3] [email_thread_engineering_decisions.txt]
+  • runs out of memory - 138 min outage, $380K impact. not repeating that.
+      [3] [email_thread_engineering_decisions.txt]
+  • - apps cache valid JWTs locally for up to 5 minutes
+      [3] [email_thread_engineering_decisions.txt]
+  • - after 5 min, requests fail if AUTH-SVC still down
+      [3] [email_thread_engineering_decisions.txt]
+
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+PATTERNS, RISKS AND RECOMMENDATIONS
+
+  [1] [oncall_handover_notes_may2025.txt]
+    - kafka broker-2 disk usage was at 67% last check (10.10.1.71). not urgent but watch it.
+    if it hits 80% the zabbix alert fires. just restart the log compaction job if needed:
+    kafka-log-dirs.sh --bootstrap-server 10.10.1.70:9092 --topic-list fraud.transaction.events
+    INC-2025-0044 was caused by this exact thing in january.
+
+  [1] [oncall_handover_notes_may2025.txt]
+    new model tested at 96.8% accuracy (above 95% threshold). null rate gate is in place now.
+    if null rate exceeds 1% in first 15 min post-deploy, pipeline auto-rollbacks to v3.2.1.
+    risk tech team is monitoring. dont need to do anything unless pagerduty fires.
+    
+    - NO other releases this weekend. may 15 is next release window (payments v2.9.0 if LB refactor done).
+
+  [1] [oncall_handover_notes_may2025.txt]
+    THINGS THAT WERE WEIRD THIS WEEK:
+    - tuesday: got a SIEM alert from QRadar about unusual payment amounts for one account.
+    risk tech investigated - turned out to be a test account that was accidentally not flagged.
+    no actual fraud. account flagged now.
+
+  [2] [analyst_question_log.txt]
+    ---
+    Q: how do i get access to the fraud engine dashboards?
+    A: you need the risk-analyst role in keycloak. submit a ServiceNow access request ticket
+    (type: Access Request). your manager needs to approve, then security team provisions it.
+    SLA is 2 business days. if urgent for an investigation, security team can do same-day
+
+  [2] [analyst_question_log.txt]
+    A: depends on your role. if youre on MGMT-NET you can use kafka-console-consumer but be careful.
+    do NOT change or commit offsets manually. do NOT reset the consumer group (FRAUD_KAFKA_CONSUMER_GROUP).
+    resetting the consumer group on fraud.transaction.events would cause the fraud engine to
+    reprocess 7 days worth of transactions - millions of events - and overwhelm the system.
+    if you need to inspect a topic for debugging, read-only consumer is fine, just dont touch offsets.
+
+  [2] [analyst_question_log.txt]
+    do NOT change or commit offsets manually. do NOT reset the consumer group (FRAUD_KAFKA_CONSUMER_GROUP).
+    resetting the consumer group on fraud.transaction.events would cause the fraud engine to
+    reprocess 7 days worth of transactions - millions of events - and overwhelm the system.
+    if you need to inspect a topic for debugging, read-only consumer is fine, just dont touch offsets.
+
+  [3] [email_thread_engineering_decisions.txt]
+    the december incident (INC-2024-1201) was because december peak volume (35% above normal)
+    exhausted the pool. connections were queuing then timing out. CBS returned 503 for 39 min.
+    22,000 transaction attempts failed. not our finest hour.
+    
+    ---
+
+  [3] [email_thread_engineering_decisions.txt]
+    ---
+    
+    FROM: risk tech lead
+    RE: fraud model stuff
+
+  [3] [email_thread_engineering_decisions.txt]
+    - never merge a feature flag mechanism without comprehensive null testing
+    - PAYMENTS-GW_FRAUD_THRESHOLD comparison with NaN evaluates to False in python
+    - this means null merchant code = no fraud check = transaction goes through
+    - 1800 transactions were unscored, 3 were actual fraud, $4200 exposure
+    - we rolled back to v3.2.1 same night (REL-2025-009)
+
+  [4] [dba_runbook_notes_informal.txt]
+    - Q1 2025 was 8% over Snowflake compute budget. data eng put query cost alerts in.
+    - ad-hoc queries over 1TB in the console = flag to data eng lead (dataeng@company.com)
+    - the fact_transactions table had a missing index after CBS v4.2.0 release (INC-2025-0288)
+    new column beneficiary_account_type was added but the index on it wasn't migrated.
+    DBA added: CREATE INDEX idx_fact_tx_ben_acct ON fact_transactions(beneficiary_account_type);
+
+─────────────────────────────────────────────────────────────────
+CONFIDENCE: ✓ HIGH  ██████████  (100%)
+─────────────────────────────────────────────────────────────────
+  • Strong: 6 documents matched the query
+  • Strong relevance score (38.9)
+  • Top source clearly dominant — high specificity
+  • 2 of top sources are well-structured documents
+  • Exact query terms found in source (4 matches)
+
+─────────────────────────────────────────────────────────────────
+RELATED QUESTIONS
+─────────────────────────────────────────────────────────────────
+  1. What was the full root cause and remediation for INC-2025-0288?
+  2. What is the current capacity and SLA status of DWH?
+  3. What happens if FRAUD_REDIS_TTL_SEC is changed without CAB approval?
+
+─────────────────────────────────────────────────────────────────
+REFERENCES  —  open source files for complete detail
+─────────────────────────────────────────────────────────────────
+[1] oncall_handover_notes_may2025.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Oncall Handover Notes May2025
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : unstructured  |  BM25: 38.9  |  Relevance: 100%
+     Matched   : - redis auto-scaling for fraud engine. sentinel config is done. load testing is  › SCHEDULED THIS WEEKEND: › THINGS THAT WERE WEIRD THIS WEEK:
+     ⚠ Note    : Unstructured doc — no formal metadata, verify content manually
+     Path      : knowledge_base\unstructured_samples\oncall_handover_notes_may2025.txt
+
+[2] analyst_question_log.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Analyst Question Log
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : structured  |  BM25: 35.6  |  Relevance: 97%
+     Path      : knowledge_base\unstructured_samples\analyst_question_log.txt
+
+[3] email_thread_engineering_decisions.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Email Thread Engineering Decisions
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : structured  |  BM25: 35.0  |  Relevance: 97%
+     Matched   : current consumer groups to never change without coordination: › just a reminder - do NOT change FRAUD_KAFKA_CONSUMER_GROUP or any other kafka co › just to document what we learnt from the march 2025 incident (INC-2025-0203, v3.
+     Path      : knowledge_base\unstructured_samples\email_thread_engineering_decisions.txt
+
+[4] dba_runbook_notes_informal.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Dba Runbook Notes
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated march 2025
+     Quality   : partial  |  BM25: 33.2  |  Relevance: 95%
+     Matched   : REDIS CACHES › DATA WAREHOUSE (Snowflake - external SaaS) › GENERAL DBA STUFF
+     ℹ Note    : Partially structured — some metadata inferred from filename/folder
+     Path      : knowledge_base\unstructured_samples\dba_runbook_notes_informal.txt
+
+[5] fraud_model_deployment_notes.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Fraud Model Deployment Notes
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated april 2025
+     Quality   : structured  |  BM25: 33.1  |  Relevance: 95%
+     Matched   : MODEL PARAMETER CONSTRAINTS › fraud model deployment notes - internal - risk tech team › KNOWN ISSUES AND GOTCHAS
+     Path      : knowledge_base\unstructured_samples\fraud_model_deployment_notes.txt
+
+[6] parameter_notes_from_call.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Parameter Notes From Call
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : unstructured  |  BM25: 32.8  |  Relevance: 95%
+     Matched   : FRAUD ENGINE stuff: › general rule: any parameter change in prod needs a CAB ticket. even if it seems  › contact for parameter questions: platform-eng@company.com or raise in #platform-
+     ⚠ Note    : Unstructured doc — no formal metadata, verify content manually
+     Path      : knowledge_base\unstructured_samples\parameter_notes_from_call.txt

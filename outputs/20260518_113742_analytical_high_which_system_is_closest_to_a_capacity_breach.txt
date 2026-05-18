@@ -1,0 +1,535 @@
+ENTERPRISE KNOWLEDGE ASSISTANT v7 — QUERY OUTPUT
+=================================================================
+Query      : Which system is closest to a capacity breach?
+Intent     : ANALYTICAL
+Confidence : HIGH (93%)
+Sources    : 6 document(s)
+Timestamp  : 2026-05-18T11:37:42.948933
+=================================================================
+
+ANALYTICAL BRIEF
+─────────────────────────────────────────────────────────────────
+Query: Which system is closest to a capacity breach?
+
+FINDINGS BY SOURCE
+────────────────────────────────────────
+
+[1] Service Level Agreement Register and Actuals  [.TXT]  [sla_contracts]
+  Owner: Platform Engineering + Business Relationship Management  |  Updated: 2025-04-15
+
+  [SHEET 3 — BREACH DETAIL LOG]
+    BREACH: INC-2024-1198
+    Date: 2024-12-14 02:17–04:35 (138 min total)
+    Affected: FRAUD-ENGINE (primary), PAYMENTS-GW (cascade), CBS (partial degradation)
+    Root Cause: Fraud Engine Redis ran Out of Memory (OOM). FRAUD_REDIS_TTL_SEC had been
+    reduced from 3600 to 300 by Risk Tech team without Platform Engineering sign-off.
+    This caused 12x recompute load, overwhelming Redis memory allocation.
+    Resolution: Redis flushed, FRAUD_REDIS_TTL_SEC restored to 3600, OOM alert threshold lowered.
+    SLA Impact: FRAUD-ENGINE breach (77.8 min vs 43 min target), PAYMENTS-GW breach (cascade).
+    Prevention: Change management process updated — parameter changes require CAB approval.
+    Redis OOM alert added to Zabbix (threshold: 80% memory).
+    Status: CLOSED. Post-incident review completed 2024-12-18.
+    BREACH: INC-2024-1201
+    Date: 2024-12-22 09:44–10:23 (39 min)
+    Affected: CBS (primary), PAYMENTS-GW (cascade)
+    Root Cause: CBS Oracle DB connection pool exhausted (CBS_DB_POOL_SIZE = 50).
+    December transaction volume spike (35% above normal) caused pool starvation.
+    New transactions queued, then timed out after 30 sec. CBS returned 503.
+    Resolution: CBS_DB_POOL_SIZE temporarily increased to 80 (DBA approved emergency change).
+    Permanent fix: pool size set to 100 with DBA sign-off. Connection monitoring added.
+    SLA Impact: CBS breach (39.3 min vs 21 min target). PAYMENTS-GW breach (cascade, 51.8 min).
+    Prevention: Capacity scaling plan initiated (see Capacity Register — PAYMENTS-GW priority).
+    Pool size auto-alert added at 80% utilisation.
+
+  [SHEET 4 — SLA PENALTY AND CREDIT SCHEDULE]
+    Internal SLA credits apply between Platform Engineering and business units.
+    | Availability Achieved | Credit to Business Unit          |
+    |-----------------------|----------------------------------|
+    | 99.90% – Target       | No credit                        |
+    | 99.50% – 99.90%       | 5% of monthly service charge     |
+    | 99.00% – 99.50%       | 10% of monthly service charge    |
+    | Below 99.00%          | 25% of monthly service charge    |
+    Credits applied in Q1 2025 (for Dec 2024 breaches):
+    CBS         : 5% credit — $2,400
+    PAYMENTS-GW : 5% credit — $1,800
+    FRAUD-ENGINE: 5% credit — $1,200
+    Total Q1 credits: $5,400
+
+  [SHEET 2 — SLA ACTUALS (Last 6 Months)]
+    CBS Availability:
+    Oct 2024: 99.97% (11.2 min downtime — planned maintenance)
+    Nov 2024: 99.98% (8.6 min downtime — planned maintenance)
+    Dec 2024: 99.91% (39.3 min downtime — INC-2024-1201: DB connection pool exhaustion) ⚠ BREACH
+    Jan 2025: 99.96% (17.4 min downtime — planned maintenance)
+    Feb 2025: 99.97% (12.8 min downtime — planned maintenance)
+    Mar 2025: 99.98% (8.6 min downtime — planned maintenance)
+    6-Month Average: 99.96% | Breaches: 1
+    PAYMENTS-GW Availability:
+    Oct 2024: 99.97% — OK
+    Nov 2024: 99.96% — OK
+    Dec 2024: 99.88% (51.8 min downtime — INC-2024-1201 cascade + INC-2024-1198) ⚠ BREACH
+    Jan 2025: 99.97% — OK
+    Feb 2025: 99.98% — OK
+    Mar 2025: 99.95% — OK
+    6-Month Average: 99.94% | Breaches: 1
+    FRAUD-ENGINE Availability:
+    Oct 2024: 99.95% — OK
+    Nov 2024: 99.93% — OK
+    Dec 2024: 99.82% (77.8 min — INC-2024-1198: Redis OOM, model scoring halted) ⚠ BREACH
+    Jan 2025: 99.94% — OK
+    Feb 2025: 99.96% — OK
+
+  [SHEET 1 — SLA TARGETS BY APPLICATION]
+    | Application    | Availability Target | Max Planned Downtime/mo | Response Time SLO (p99) | Error Rate SLO | Support Window     |
+    |----------------|---------------------|--------------------------|--------------------------|----------------|--------------------|
+    | CBS            | 99.95%              | 21 min/month             | < 500ms                  | < 0.1%         | 24x7               |
+    | PAYMENTS-GW    | 99.95%              | 21 min/month             | < 2,000ms                | < 0.05%        | 24x7               |
+    | FRAUD-ENGINE   | 99.90%              | 43 min/month             | < 200ms                  | < 0.5%         | 24x7               |
+    | REPORTING-SVC  | 99.50%              | 3.6 hr/month             | < 10,000ms               | < 1.0%         | Business hours     |
+    | AUTH-SVC       | 99.99%              | 4 min/month              | < 100ms                  | < 0.01%        | 24x7               |
+    | SWIFT-ADAPTER  | 99.90%              | 43 min/month             | < 120,000ms (SWIFT dep.) | < 0.1%         | Business hours     |
+    | DATA-WAREHOUSE | 99.00%              | 7.2 hr/month             | N/A (batch)              | < 2.0%         | Business hours     |
+    | Kafka Cluster  | 99.95%              | 21 min/month             | < 50ms (produce/consume) | < 0.01%        | 24x7               |
+    NOTE: AUTH-SVC at 99.99% reflects its role as single point of authentication failure.
+    Any AUTH-SVC outage cascades to ALL other applications immediately.
+
+
+[2] System Capacity and Performance Register  [.TXT]  [capacity_planning]
+  Owner: Platform Engineering Team  |  Updated: 2025-04-01
+
+  [SHEET 3 — TRANSACTION VOLUME TRENDS]
+    | Month     | Total Txns  | Payments Txns | Fraud Checks | SWIFT Transfers | Avg Latency (ms) | Peak TPS |
+    |-----------|-------------|---------------|--------------|-----------------|------------------|----------|
+    | Oct 2024  | 4,120,000   | 1,840,000     | 1,840,000    | 92,000          | 187              | 312      |
+    | Nov 2024  | 4,380,000   | 1,960,000     | 1,960,000    | 98,000          | 192              | 341      |
+    | Dec 2024  | 5,910,000   | 2,640,000     | 2,640,000    | 132,000         | 241              | 487      |
+    | Jan 2025  | 4,210,000   | 1,880,000     | 1,880,000    | 94,000          | 189              | 318      |
+    | Feb 2025  | 4,350,000   | 1,940,000     | 1,940,000    | 97,000          | 191              | 327      |
+    | Mar 2025  | 4,690,000   | 2,090,000     | 2,090,000    | 104,500         | 198              | 354      |
+    KEY OBSERVATIONS:
+    - December 2024 shows 35% volume spike (seasonal/year-end). PAYMENTS-GW peak CPU hit 88% during this period.
+    - Fraud Engine checks 100% of payment transactions — volume scales linearly with payments.
+    - SWIFT transfers average ~5% of total payment volume.
+    - Average latency trending upward: +11ms over 6 months. Root cause under investigation (see INC-2024-1147).
+    - Peak TPS of 487 (December) approaches PAYMENTS-GW capacity limit of ~500 TPS before horizontal scaling is needed.
+
+  [SHEET 4 — CAPACITY RECOMMENDATIONS]
+    PRIORITY 1 — PAYMENTS-GW Scale-Up (Immediate)
+    Issue: Peak CPU 88%, approaching 500 TPS ceiling. Dec 2024 near-breach event.
+    Recommendation: Add second PAYMENTS-GW instance (horizontal scale) behind load balancer.
+    Estimated effort: 2 sprints. Infra cost: ~$1,200/month additional compute.
+    Risk if not done: Service degradation during next peak period (Dec 2025 or major promotional event).
+    PRIORITY 2 — FRAUD-ENGINE Optimisation (Q3 2025)
+    Issue: Peak CPU 94%, highest across all services. Redis cache TTL reduction increases recompute load.
+    Recommendation: Profile scoring model inference. Consider model quantisation or GPU offload for batch scoring.
+    Note: Quarterly retraining (FRAUD-RETRAIN-001) spikes CPU to 100% for ~3 hours — schedule during low-traffic window.
+    PRIORITY 3 — ELK Node Expansion (Q3 2025)
+    Issue: RAM peak 91%, hot-tier disk filling at rate of ~180 GB/month.
+    Recommendation: Add second ELK node (current single-node setup is also a resilience risk).
+    Estimated effort: 1 sprint. Storage cost: +$400/month.
+    PRIORITY 4 — CBS Oracle DB Storage Planning (Q4 2025)
+    Issue: At current growth rate, hits 80% capacity by May 2026.
+    Recommendation: DBA team to review table partitioning and archival strategy in Q3 2025.
+    Archival candidate: Transaction records >3 years old (~600 GB eligible).
+
+  [SHEET 1 — APPLICATION SERVER CAPACITY]
+    | Application       | Host         | vCPUs | RAM (GB) | Disk (GB) | Avg CPU% | Peak CPU% | Avg RAM% | Peak RAM% | Status    |
+    |-------------------|--------------|-------|----------|-----------|----------|-----------|----------|-----------|-----------|
+    | CBS               | 10.10.1.10   | 16    | 64       | 500       | 34%      | 71%       | 52%      | 78%       | HEALTHY   |
+    | PAYMENTS-GW       | 10.10.1.20   | 8     | 32       | 200       | 41%      | 88%       | 61%      | 90%       | WARNING   |
+    | FRAUD-ENGINE      | 10.10.1.30   | 12    | 48       | 300       | 55%      | 94%       | 67%      | 85%       | WARNING   |
+    | REPORTING-SVC     | 10.10.1.40   | 8     | 32       | 400       | 22%      | 65%       | 48%      | 72%       | HEALTHY   |
+    | AUTH-SVC          | 10.10.1.50   | 4     | 16       | 100       | 18%      | 44%       | 35%      | 58%       | HEALTHY   |
+    | SWIFT-ADAPTER     | 10.10.1.60   | 4     | 16       | 100       | 12%      | 31%       | 28%      | 41%       | HEALTHY   |
+    | KAFKA-BROKER-1    | 10.10.1.70   | 8     | 32       | 2000      | 48%      | 76%       | 55%      | 71%       | HEALTHY   |
+    | KAFKA-BROKER-2    | 10.10.1.71   | 8     | 32       | 2000      | 46%      | 73%       | 54%      | 70%       | HEALTHY   |
+    | KAFKA-BROKER-3    | 10.10.1.72   | 8     | 32       | 2000      | 47%      | 75%       | 55%      | 71%       | HEALTHY   |
+    | ETL-HOST          | 10.10.1.80   | 8     | 32       | 500       | 15%      | 82%       | 42%      | 88%       | WARNING   |
+    | ZABBIX-SERVER     | 10.10.50.20  | 4     | 16       | 500       | 11%      | 29%       | 40%      | 55%       | HEALTHY   |
+    | ELK-NODE-1        | 10.10.50.50  | 8     | 64       | 5000      | 38%      | 67%       | 72%      | 91%       | WARNING   |
+    STATUS THRESHOLDS:
+    HEALTHY  : CPU avg <70%, RAM avg <75%, no sustained peaks >90%
+    WARNING  : CPU avg >70% OR RAM avg >75% OR any peak >90% in last 30 days
+    CRITICAL : CPU avg >85% OR RAM avg >85% OR peak >95% sustained >5 min
+
+  [SHEET 2 — DATABASE CAPACITY]
+    | Database          | Host         | Engine        | Size (GB) | Growth/Month | Max Size | Used%  | Status    |
+    |-------------------|--------------|---------------|-----------|--------------|----------|--------|-----------|
+    | CBS-OracleDB      | 10.10.2.10   | Oracle 19c    | 1840      | +22 GB       | 3000 GB  | 61%    | HEALTHY   |
+    | Auth-PostgreSQL    | 10.10.2.11   | PostgreSQL 15 | 45        | +1.2 GB      | 500 GB   | 9%     | HEALTHY   |
+    | Payments-PostgreSQL| 10.10.2.12   | PostgreSQL 15 | 312       | +18 GB       | 1000 GB  | 31%    | HEALTHY   |
+    | Fraud-Redis        | 10.10.2.13   | Redis 7.2     | 8         | +0.2 GB      | 32 GB    | 25%    | HEALTHY   |
+    | Snowflake-DWH      | Cloud        | Snowflake     | 12400     | +310 GB      | Elastic  | N/A    | HEALTHY   |
+    PROJECTION — CBS Oracle DB:
+    Current size    : 1840 GB
+    Monthly growth  : +22 GB
+    Time to 80% cap : ~13.6 months (approx. May 2026)
+    Recommended action: Initiate storage expansion planning by Q3 2025. DBA team to review partitioning strategy.
+    PROJECTION — Payments PostgreSQL:
+    Current size    : 312 GB
+    Monthly growth  : +18 GB
+    Time to 80% cap : ~37.8 months — low urgency
+
+
+[3] Major Incident Post-Mortem Reports  [.TXT]  [incident_reports]
+  Owner: Platform Engineering + Risk Team  |  Updated: 2025-01-20
+
+  [SLIDE 6 — INC-2024-1201: CBS DB Pool Exhaustion]
+    INCIDENT: INC-2024-1201
+    DATE: 2024-12-22 09:44 — 10:23 (39 minutes)
+    SEVERITY: SEV-1 (core banking unavailable during peak business hours)
+    CUSTOMER IMPACT: All customer transactions failed 09:44–10:23. Portal showed errors.
+    Estimated 22,000 failed transaction attempts.
+    ROOT CAUSE:
+    CBS_DB_POOL_SIZE = 50 was insufficient for December peak load.
+    Transaction volume 35% above baseline triggered pool starvation.
+    Each transaction holds a DB connection for ~600ms average.
+    At 500 TPS peak, connections required = 500 × 0.6 = 300 concurrent (6x the pool size).
+    IMMEDIATE FIX: Pool size raised to 80 (emergency), then 100 (permanent, DBA approved).
+    PERMANENT FIX: Connection pool monitoring, auto-alert at 80% utilisation.
+    SYSTEMIC FIX: PAYMENTS-GW horizontal scaling planned (see Capacity Register Priority 1).
+
+  [SLIDE 2 — INCIDENT SUMMARY TABLE]
+    | Incident ID   | Date          | Severity | Duration | Systems Affected                    | Root Cause Category      | Status  |
+    |---------------|---------------|----------|----------|-------------------------------------|--------------------------|---------|
+    | INC-2024-0341 | 2024-05-07    | SEV-2    | 47 min   | AUTH-SVC, All apps                  | Config error             | CLOSED  |
+    | INC-2024-0892 | 2024-08-19    | SEV-2    | 82 min   | REPORTING-SVC, DWH                  | ETL schema mismatch      | CLOSED  |
+    | INC-2024-1198 | 2024-12-14    | SEV-1    | 138 min  | FRAUD-ENGINE, PAYMENTS-GW, CBS      | Redis OOM (param change) | CLOSED  |
+    | INC-2024-1201 | 2024-12-22    | SEV-1    | 39 min   | CBS, PAYMENTS-GW                    | DB pool exhaustion       | CLOSED  |
+    | INC-2025-0044 | 2025-01-31    | SEV-3    | 18 min   | KAFKA-BROKER-2                      | Disk space (log segment) | CLOSED  |
+
+  [SLIDE 7 — CROSS-INCIDENT PATTERNS & RECOMMENDATIONS]
+    PATTERN 1: December is the highest-risk month
+    Both SEV-1 incidents occurred in December during peak transaction load.
+    Recommendation: Implement a December Freeze — no non-critical changes in Dec 1-31.
+    Status: APPROVED by CTO. First freeze: December 2025.
+    PATTERN 2: Parameter changes are a leading cause of incidents
+    INC-2024-1198 (Redis TTL), INC-2024-0341 (DB password) both caused by config changes.
+    Recommendation: All production parameter changes require CAB approval and impact analysis.
+    Status: IMPLEMENTED. CAB process updated February 2025.
+    PATTERN 3: AUTH-SVC cascades are disproportionately damaging
+    Any AUTH-SVC degradation immediately impacts 100% of user-facing services.
+    Recommendation: Implement token caching at application level (grace period after AUTH-SVC down).
+    Status: PROPOSED. Architecture review Q2 2025.
+    PATTERN 4: Schema changes without cross-team notification
+    INC-2024-0892 caused by CBS schema change without notifying ETL team.
+    Recommendation: Mandatory schema change notification in release checklist.
+    Status: IMPLEMENTED. #schema-changes channel active.
+    OVERALL TREND:
+    Total SEV-1/2 incidents 2024: 5
+    Total downtime (SEV-1/2): 324 minutes
+    Target for 2025: <200 minutes total SEV-1/2 downtime
+    Key levers: December Freeze, CAB rigor, AUTH-SVC resilience, capacity headroom.
+
+  [SLIDE 5 — INC-2024-1198: Fraud Engine Collapse (Redis OOM)]
+    INCIDENT: INC-2024-1198
+    DATE: 2024-12-14 02:17 — 04:35 (138 minutes) — MOST SEVERE 2024
+    SEVERITY: SEV-1 (payment processing halted for 2+ hours during night batch)
+    CUSTOMER IMPACT: ~14,200 payment transactions delayed or failed. SWIFT transfers halted.
+    Estimated revenue impact: ~$380,000 in delayed settlements.
+    TIMELINE:
+    02:17 — Fraud Engine begins returning 503. Consumer lag on fraud.transaction.events spikes.
+    02:19 — PAYMENTS-GW detects Fraud Engine unavailable. Fails closed (blocks all payments).
+    02:21 — SEV-1 declared. Platform Engineering, Risk Tech, Payments teams paged.
+    02:34 — Redis memory usage confirmed at 100% (OOM). Fraud scoring process crashed.
+    02:41 — Root cause identified: FRAUD_REDIS_TTL_SEC changed from 3600 to 300 six days ago.
+    12x increase in Redis write frequency overwhelmed memory allocation limit.
+    02:55 — Redis instance flushed (cache cleared). Fraud Engine restarted.
+    03:08 — Fraud Engine operational. Payment processing resumes.
+    03:15 — Kafka consumer lag begins recovering (backlog of ~180,000 events).
+    04:35 — All backlogged transactions processed. Full recovery declared.
+    ROOT CAUSE:
+    Risk Technology team reduced FRAUD_REDIS_TTL_SEC from 3600 to 300 to improve fraud
+    score freshness for a new model deployment. The change was made directly in the
+    production config file without a CAB request (team considered it a minor tuning change).
+    Impact analysis of the 12x cache write increase on Redis memory was not performed.
+    5-WHYS ANALYSIS:
+
+
+[4] Analyst Faq  [.TXT]  [unstructured_samples]
+  Owner: —  |  Updated: may 2025
+
+  [Q: what is the december freeze?]
+    Q: what is the december freeze?
+    A: After INC-2024-1201 (CBS pool exhaustion at december peak volume), the CTO approved a policy:
+    no production releases December 1-31. The december period has 35% above normal transaction volume.
+    Changes to cope with december (like CBS_DB_POOL_SIZE = 100) are done in October/November.
+    December capacity review is now scheduled for October 2025.
+
+  [Q: what is the SLA for CBS / payments?]
+    Q: what is the SLA for CBS / payments?
+    A: CBS SLA: 99.9% availability (target), 99.87% actual Q1 2025 (below target due to INC-2024-1201)
+    Payments GW SLA: 99.95% target, 99.91% actual Q1 2025
+    Full SLA register is in sla_register_and_actuals.txt in the knowledge base.
+
+  [Q: what's the difference between CBS and Payments Gateway?]
+    Q: what's the difference between CBS and Payments Gateway?
+    A: CBS is the backend account ledger. Payments Gateway (PAYMENTS-GW) is the transaction processor.
+    When a payment happens: Payments GW receives it → calls Fraud Engine for a risk score →
+    calls CBS to debit/credit the accounts → returns confirmation.
+    CBS doesn't talk to the outside world. Payments GW does.
+    PAYMENTS-GW host: 10.10.1.20, Port: 9000.
+
+  [Q: what is CBS?]
+    Q: what is CBS?
+    A: Core Banking System. It's the mainframe-era system that holds all account data, balances, and
+    transaction history. When people say "the core", "the mainframe", or "account system" they mean CBS.
+    Host: 10.10.1.10, Port: 8080. API endpoint: http://10.10.1.10:8080/api/v2/
+    CBS is owned by the CBS team (cbs-ops@company.com). Platform eng does the infra.
+
+
+[5] Slack Incident Thread Dec2024  [.TXT]  [unstructured_samples]
+  Owner: —  |  Updated: —
+
+  [follow-up from jan 2025 post-PIR:]
+    follow-up from jan 2025 post-PIR:
+    - CBS_DB_POOL_SIZE permanently set to 100 (was 50)
+    - pool utilisation alert added to zabbix at 80%
+    - december capacity review scheduled for october 2025 (before december freeze kicks in)
+    - december freeze policy approved by CTO - no releases dec 1-31 from now on
+    - 22,000 transaction attempts failed during the 13-minute outage
+    - INC-2024-1201 closed
+
+  [[09:57] platform_lead: incident duration 13 min. CBS pool exhausted by december ]
+    [09:57] platform_lead: incident duration 13 min. CBS pool exhausted by december peak.
+    immediate fix: pool to 80.
+    permanent fix: DBA to approve pool size 100 with proper analysis.
+    action item: capacity planning review for december peaks.
+
+  [[10:05] cbs_team_lead: good idea. CBS pool, payments GW capacity, fraud engine.]
+    [10:05] cbs_team_lead: good idea. CBS pool, payments GW capacity, fraud engine.
+    all need to be reviewed in november before the december rush.
+
+  [[10:03] platform_lead: INC-2024-1201 filed. will do proper PIR next week.]
+    [10:03] platform_lead: INC-2024-1201 filed. will do proper PIR next week.
+    lesson: we need to scale up before december, not during.
+    december freeze for releases going forward. what about a december scale-up checklist?
+
+────────────────────────────────────────
+KEY METRICS AND DATA POINTS
+
+  • NOTE: AUTH-SVC at 99.99% reflects its role as single point of authentication failure.
+      [1] [sla_register_and_actuals.txt]
+  • SHEET 2 — SLA ACTUALS (Last 6 Months)
+      [1] [sla_register_and_actuals.txt]
+  • Oct 2024: 99.97% (11.2 min downtime — planned maintenance)
+      [1] [sla_register_and_actuals.txt]
+  • Nov 2024: 99.98% (8.6 min downtime — planned maintenance)
+      [1] [sla_register_and_actuals.txt]
+  • Dec 2024: 99.91% (39.3 min downtime — INC-2024-1201: DB connection pool exhaustion) ⚠ BREACH
+      [1] [sla_register_and_actuals.txt]
+  • Jan 2025: 99.96% (17.4 min downtime — planned maintenance)
+      [1] [sla_register_and_actuals.txt]
+  • Feb 2025: 99.97% (12.8 min downtime — planned maintenance)
+      [1] [sla_register_and_actuals.txt]
+  • Mar 2025: 99.98% (8.6 min downtime — planned maintenance)
+      [1] [sla_register_and_actuals.txt]
+  • 6-Month Average: 99.96% | Breaches: 1
+      [1] [sla_register_and_actuals.txt]
+  • Oct 2024: 99.97% — OK
+      [1] [sla_register_and_actuals.txt]
+  • Nov 2024: 99.96% — OK
+      [1] [sla_register_and_actuals.txt]
+  • Dec 2024: 99.88% (51.8 min downtime — INC-2024-1201 cascade + INC-2024-1198) ⚠ BREACH
+      [1] [sla_register_and_actuals.txt]
+  • Jan 2025: 99.97% — OK
+      [1] [sla_register_and_actuals.txt]
+  • Feb 2025: 99.98% — OK
+      [1] [sla_register_and_actuals.txt]
+  • Mar 2025: 99.95% — OK
+      [1] [sla_register_and_actuals.txt]
+  • 6-Month Average: 99.94% | Breaches: 1
+      [1] [sla_register_and_actuals.txt]
+  • Oct 2024: 99.95% — OK
+      [1] [sla_register_and_actuals.txt]
+  • Nov 2024: 99.93% — OK
+      [1] [sla_register_and_actuals.txt]
+  • Dec 2024: 99.82% (77.8 min — INC-2024-1198: Redis OOM, model scoring halted) ⚠ BREACH
+      [1] [sla_register_and_actuals.txt]
+  • Jan 2025: 99.94% — OK
+      [1] [sla_register_and_actuals.txt]
+
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+PATTERNS, RISKS AND RECOMMENDATIONS
+
+  [1] [sla_register_and_actuals.txt]
+    Affected: FRAUD-ENGINE (primary), PAYMENTS-GW (cascade), CBS (partial degradation)
+    Root Cause: Fraud Engine Redis ran Out of Memory (OOM). FRAUD_REDIS_TTL_SEC had been
+    reduced from 3600 to 300 by Risk Tech team without Platform Engineering sign-off.
+    This caused 12x recompute load, overwhelming Redis memory allocation.
+    Resolution: Redis flushed, FRAUD_REDIS_TTL_SEC restored to 3600, OOM alert threshold lowered.
+
+  [1] [sla_register_and_actuals.txt]
+    Affected: CBS (primary), PAYMENTS-GW (cascade)
+    Root Cause: CBS Oracle DB connection pool exhausted (CBS_DB_POOL_SIZE = 50).
+    December transaction volume spike (35% above normal) caused pool starvation.
+    New transactions queued, then timed out after 30 sec. CBS returned 503.
+    Resolution: CBS_DB_POOL_SIZE temporarily increased to 80 (DBA approved emergency change).
+
+  [1] [sla_register_and_actuals.txt]
+    Root Cause: CBS Oracle DB connection pool exhausted (CBS_DB_POOL_SIZE = 50).
+    December transaction volume spike (35% above normal) caused pool starvation.
+    New transactions queued, then timed out after 30 sec. CBS returned 503.
+    Resolution: CBS_DB_POOL_SIZE temporarily increased to 80 (DBA approved emergency change).
+    Permanent fix: pool size set to 100 with DBA sign-off. Connection monitoring added.
+
+  [2] [system_capacity_register.txt]
+    |-------------------|--------------|-------|----------|-----------|----------|-----------|----------|-----------|-----------|
+    | CBS               | 10.10.1.10   | 16    | 64       | 500       | 34%      | 71%       | 52%      | 78%       | HEALTHY   |
+    | PAYMENTS-GW       | 10.10.1.20   | 8     | 32       | 200       | 41%      | 88%       | 61%      | 90%       | WARNING   |
+    | FRAUD-ENGINE      | 10.10.1.30   | 12    | 48       | 300       | 55%      | 94%       | 67%      | 85%       | WARNING   |
+    | REPORTING-SVC     | 10.10.1.40   | 8     | 32       | 400       | 22%      | 65%       | 48%      | 72%       | HEALTHY   |
+
+  [2] [system_capacity_register.txt]
+    | CBS               | 10.10.1.10   | 16    | 64       | 500       | 34%      | 71%       | 52%      | 78%       | HEALTHY   |
+    | PAYMENTS-GW       | 10.10.1.20   | 8     | 32       | 200       | 41%      | 88%       | 61%      | 90%       | WARNING   |
+    | FRAUD-ENGINE      | 10.10.1.30   | 12    | 48       | 300       | 55%      | 94%       | 67%      | 85%       | WARNING   |
+    | REPORTING-SVC     | 10.10.1.40   | 8     | 32       | 400       | 22%      | 65%       | 48%      | 72%       | HEALTHY   |
+    | AUTH-SVC          | 10.10.1.50   | 4     | 16       | 100       | 18%      | 44%       | 35%      | 58%       | HEALTHY   |
+
+  [2] [system_capacity_register.txt]
+    | KAFKA-BROKER-2    | 10.10.1.71   | 8     | 32       | 2000      | 46%      | 73%       | 54%      | 70%       | HEALTHY   |
+    | KAFKA-BROKER-3    | 10.10.1.72   | 8     | 32       | 2000      | 47%      | 75%       | 55%      | 71%       | HEALTHY   |
+    | ETL-HOST          | 10.10.1.80   | 8     | 32       | 500       | 15%      | 82%       | 42%      | 88%       | WARNING   |
+    | ZABBIX-SERVER     | 10.10.50.20  | 4     | 16       | 500       | 11%      | 29%       | 40%      | 55%       | HEALTHY   |
+    | ELK-NODE-1        | 10.10.50.50  | 8     | 64       | 5000      | 38%      | 67%       | 72%      | 91%       | WARNING   |
+
+  [3] [incident_postmortem_2024.txt]
+    Major Incident Post-Mortems
+    2024 Significant Events — Root Cause & Prevention
+    Blameless. Structured. Action-Oriented.
+
+  [3] [incident_postmortem_2024.txt]
+    CONTRIBUTING FACTORS:
+    - No peer review required for config file changes below a certain risk threshold
+    - Keycloak does not immediately surface DB connection failure in health endpoint
+    - On-call engineer's runbook did not include config validation as first step
+
+  [3] [incident_postmortem_2024.txt]
+    - On-call engineer's runbook did not include config validation as first step
+    
+    ACTION ITEMS:
+    [DONE] All config changes now require peer review and push via CI/CD pipeline (manual edits blocked)
+    [DONE] Keycloak health check extended to include DB connectivity probe
+
+  [4] [new_analyst_faq.txt]
+    A: CBS is the backend account ledger. Payments Gateway (PAYMENTS-GW) is the transaction processor.
+    When a payment happens: Payments GW receives it → calls Fraud Engine for a risk score →
+    calls CBS to debit/credit the accounts → returns confirmation.
+
+─────────────────────────────────────────────────────────────────
+CONFIDENCE: ✓ HIGH  ██████████  (93%)
+─────────────────────────────────────────────────────────────────
+  • Strong: 6 documents matched the query
+  • Strong relevance score (21.3)
+  • Top source clearly dominant — high specificity
+  • 3 of top sources are well-structured documents
+  • Partial query term match (1 terms found)
+
+─────────────────────────────────────────────────────────────────
+RELATED QUESTIONS
+─────────────────────────────────────────────────────────────────
+  1. What is the full SLA breach history for FRAUD-ENGINE?
+  2. Which upcoming releases affect PAYMENTS-GW?
+  3. What patterns caused INC-2024-1198 and how were they addressed?
+
+─────────────────────────────────────────────────────────────────
+REFERENCES  —  open source files for complete detail
+─────────────────────────────────────────────────────────────────
+[1] sla_register_and_actuals.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Service Level Agreement Register and Actuals
+     Folder    : sla_contracts
+     Owner     : Platform Engineering + Business Relationship Management
+     Info      : v3.2 | Updated 2025-04-15
+     Quality   : structured  |  BM25: 21.3  |  Relevance: 100%
+     Matched   : SHEET 3 — BREACH DETAIL LOG › SHEET 4 — SLA PENALTY AND CREDIT SCHEDULE › SHEET 2 — SLA ACTUALS (Last 6 Months)
+     Path      : knowledge_base\sla_contracts\sla_register_and_actuals.txt
+
+[2] system_capacity_register.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : System Capacity and Performance Register
+     Folder    : capacity_planning
+     Owner     : Platform Engineering Team
+     Info      : v5.1 | Updated 2025-04-01
+     Quality   : structured  |  BM25: 20.8  |  Relevance: 99%
+     Matched   : SHEET 3 — TRANSACTION VOLUME TRENDS › SHEET 4 — CAPACITY RECOMMENDATIONS › SHEET 1 — APPLICATION SERVER CAPACITY
+     Path      : knowledge_base\capacity_planning\system_capacity_register.txt
+
+[3] incident_postmortem_2024.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Major Incident Post-Mortem Reports
+     Folder    : incident_reports
+     Owner     : Platform Engineering + Risk Team
+     Info      : v1.4 | Updated 2025-01-20
+     Quality   : structured  |  BM25: 19.5  |  Relevance: 97%
+     Matched   : SLIDE 6 — INC-2024-1201: CBS DB Pool Exhaustion › SLIDE 2 — INCIDENT SUMMARY TABLE › SLIDE 7 — CROSS-INCIDENT PATTERNS & RECOMMENDATIONS
+     Path      : knowledge_base\incident_reports\incident_postmortem_2024.txt
+
+[4] new_analyst_faq.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Analyst Faq
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated may 2025
+     Quality   : structured  |  BM25: 18.1  |  Relevance: 94%
+     Matched   : Q: what is the december freeze? › Q: what is the SLA for CBS / payments? › Q: what's the difference between CBS and Payments Gateway?
+     Path      : knowledge_base\unstructured_samples\new_analyst_faq.txt
+
+[5] slack_incident_thread_dec2024.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Slack Incident Thread Dec2024
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : structured  |  BM25: 17.3  |  Relevance: 93%
+     Matched   : follow-up from jan 2025 post-PIR: › [09:57] platform_lead: incident duration 13 min. CBS pool exhausted by december  › [10:05] cbs_team_lead: good idea. CBS pool, payments GW capacity, fraud engine.
+     Path      : knowledge_base\unstructured_samples\slack_incident_thread_dec2024.txt
+
+[6] incident_tracker_2024_2025.xlsx  (.XLSX)
+     ───────────────────────────────────────────────────────
+     Title     : Incident Tracking Register 2024-2025
+     Folder    : incident_reports
+     Owner     : Platform Engineering
+     Info      : v4.1 | Updated 2025-04-20
+     Quality   : structured  |  BM25: 16.9  |  Relevance: 92%
+     Matched   : System Reliability › Incident Log › KPIs and Trends
+     Path      : knowledge_base\incident_reports\incident_tracker_2024_2025.xlsx

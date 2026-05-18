@@ -1,0 +1,290 @@
+ENTERPRISE KNOWLEDGE ASSISTANT v7 — QUERY OUTPUT
+=================================================================
+Query      : What VLANs are used in the production network and what are their IP ranges?
+Intent     : SUMMARY
+Confidence : HIGH (93%)
+Sources    : 6 document(s)
+Timestamp  : 2026-05-18T11:39:18.804617
+=================================================================
+
+SUMMARY
+─────────────────────────────────────────────────────────────────
+────────────────────────────────────────
+[1] Core Network Architecture Overview  [.TXT]
+  Topic  : Network Architecture
+  Owner  : Infrastructure Team  |  v3.2  |  Updated: 2024-11-10
+
+  [KEY NETWORK SEGMENTS]
+    SEGMENT: PROD-NET-01
+    IP Range: 10.10.1.0/24
+    Purpose: Production application servers
+    VLAN ID: 101
+    Gateway: 10.10.1.1
+    SEGMENT: PROD-NET-02
+    IP Range: 10.10.2.0/24
+    Purpose: Production database servers
+    VLAN ID: 102
+    Gateway: 10.10.2.1
+    SEGMENT: MGMT-NET
+    IP Range: 10.10.50.0/24
+    Purpose: Management and monitoring
+    VLAN ID: 150
+    Gateway: 10.10.50.1
+    SEGMENT: DMZ-NET
+    IP Range: 172.16.1.0/24
+    Purpose: Externally accessible services
+    VLAN ID: 200
+    Gateway: 172.16.1.1
+
+  [CORE NETWORK TOPOLOGY]
+    The enterprise network is divided into three primary zones:
+    1. DMZ (Demilitarized Zone) - External-facing services
+    2. Internal Network - Core business applications
+    3. Restricted Zone - Sensitive financial and compliance systems
+    All traffic between zones passes through the Central Firewall Cluster (CFC).
+
+  [MONITORING]
+    All network devices monitored via Zabbix on 10.10.50.20.
+    SNMP traps forwarded to central SIEM at 10.10.50.100.
+
+  [REDUNDANCY AND FAILOVER]
+    Active-passive redundancy for all core switches. Failover time under 30 seconds.
+    Primary data center: DC-WEST. Failover: DC-EAST. Connected via dual 10Gbps MPLS links.
+
+────────────────────────────────────────
+[2] Monitoring and Alerting Infrastructure Guide  [.TXT]
+  Topic  : Monitoring, Zabbix, Datadog, ELK, SIEM, Alerting
+  Owner  : Platform Engineering Team  |  v3.0  |  Updated: 2025-03-15
+
+  [ZABBIX]
+    Server: 10.10.50.20
+    Console: http://10.10.50.20:8080 (MGMT-NET only)
+    Version: 6.4
+    SNMP polling: 60 seconds
+    Agents installed on all PROD-NET-01 and PROD-NET-02 servers.
+    Alert thresholds:
+    CPU usage >85% for 5 minutes
+    Memory usage >90%
+    Disk usage >80%
+    Service down (systemd check)
+
+  [DATADOG APM]
+    SLOs:
+    CBS API: p99 latency < 500ms
+    PAYMENTS-GW: p99 latency < 2 seconds
+    FRAUD-ENGINE scoring: p99 latency < 200ms
+    AUTH-SVC token validation: p99 latency < 100ms
+    Dashboards:
+    Core Banking Health — CBS and Payments overview
+    Security Overview — Auth failures, suspicious patterns
+    ETL Pipeline — Batch job status and durations
+    Datadog alerts route to PagerDuty.
+
+  [ELK STACK]
+    Elasticsearch: 10.10.50.50:9200
+    Kibana: http://10.10.50.50:5601 (MGMT-NET only)
+    Log retention: Hot 7 days, Warm 30 days, Cold 1 year
+    Useful Kibana queries:
+    Error spike: level:ERROR AND @timestamp:[now-1h TO now]
+    Payment failures: app:payments-gw AND message:*failed*
+    Auth failures: app:auth-svc AND message:*401*
+
+  [MONITORING STACK]
+    LAYER 1 — Infrastructure: Zabbix (10.10.50.20, port 8080)
+    LAYER 2 — APM: Datadog (cloud-hosted, agent on all app servers)
+    LAYER 3 — Log Aggregation: ELK Stack (Elasticsearch 10.10.50.50:9200, Kibana port 5601)
+    LAYER 4 — Security: SIEM — IBM QRadar (10.10.50.100)
+    LAYER 5 — Synthetic: AWS CloudWatch health checks every 60 seconds
+
+────────────────────────────────────────
+[3] Enterprise Port and Protocol Registry  [.TXT]
+  Topic  : Port Numbers, Firewall Rules, Protocols
+  Owner  : Network Security Team  |  v4.1  |  Updated: 2025-02-20
+
+  [APPROVED PORTS]
+    PORT 8080 — TCP/HTTP
+    Application: Core Banking System (CBS) REST API
+    Host: 10.10.1.10
+    Direction: Internal only (PROD-NET-01)
+    Firewall Rule: FW-RULE-0042
+    PORT 9000 — TCP/HTTP
+    Application: Payments Gateway API
+    Host: 10.10.1.20
+    Direction: Internal only (PROD-NET-01)
+    Firewall Rule: FW-RULE-0050
+    PORT 8500 — TCP/HTTP
+    Application: Fraud Engine Scoring API
+    Host: 10.10.1.30
+    Direction: Internal only (PROD-NET-01)
+    Firewall Rule: FW-RULE-0055
+    PORT 8200 — TCP/HTTP
+    Application: Reporting Service API
+    Host: 10.10.1.40
+    Direction: Internal only (PROD-NET-01)
+    Firewall Rule: FW-RULE-0060
+    PORT 8443 — TCP/HTTPS
+    Application: Authentication Service (Keycloak)
+
+  [REQUESTING A NEW PORT]
+    Submit CAB request via ServiceNow portal (ticket type: Network Change).
+    Required fields: business justification, source/dest IPs, port, protocol, duration.
+    Approval: Network Security Lead + Application Owner.
+    SLA: 5 business days.
+
+  [BLOCKED PORTS]
+    Port 23 (Telnet) — Blocked. Insecure.
+    Port 21 (FTP) — Blocked. Use SFTP on port 22.
+    Port 80 (HTTP) — Redirected to 443. Direct access blocked.
+    Port 3389 (RDP) — Blocked. Use jump server via SSH.
+
+────────────────────────────────────────
+[4] Network Team Working Notes  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —  |  Updated: february 2025
+
+  [VLAN LAYOUT (as of Q4 2024)]
+    VLAN LAYOUT (as of Q4 2024)
+    VLAN 10 - APP-NET:      10.10.1.0/24   (application servers, all prod services)
+    VLAN 20 - DB-NET:       10.10.2.0/24   (databases only, no direct internet)
+    VLAN 30 - MGMT-NET:     10.10.50.0/24  (management, monitoring, bastion hosts)
+    VLAN 40 - DMZ:          10.10.100.0/24 (external-facing only, nothing internal touches this directly)
+    VLAN 50 - CORP-NET:     192.168.1.0/24 (corporate office, not prod - for LDAP federation only)
+
+  [MONITORING NETWORK SEGMENTS]
+    MONITORING NETWORK SEGMENTS
+    Zabbix server: 10.10.50.30 (MGMT-NET) - polls all APP-NET and DB-NET hosts via SNMP + agent
+    Datadog agent: installed on each app server, beacons to Datadog cloud (approved egress)
+    QRadar SIEM: 10.10.50.40 (MGMT-NET) - collects syslog from all network devices + app servers
+    ELK stack: 10.10.50.50 (Kibana UI port 5601, ElasticSearch port 9200, MGMT-NET only)
+    Kibana URL: http://10.10.50.50:5601 (accessible from MGMT-NET only, not from corporate)
+
+  [DR NETWORK NOTES (secondary site at DR datacenter)]
+    DR NETWORK NOTES (secondary site at DR datacenter)
+    DR site replicates APP-NET and DB-NET at 10.20.0.0/16
+    CBS DR replica: 10.20.1.10
+    RTO target: 4 hours for full platform switch to DR
+    RPO target: 15 minutes (synchronous CBS DB replication, async everything else)
+    last DR test: october 2024. CBS failover took 3hr 42min (within RTO).
+    next DR test: scheduled october 2025.
+
+  [network team working notes - shared with platform eng]
+    network team working notes - shared with platform eng
+    author: network team (netsec lead)
+    last updated: february 2025
+    NOTE: these are working notes, not the official network architecture doc
+
+────────────────────────────────────────
+[5] Analyst Faq  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —  |  Updated: may 2025
+
+  [Q: what are MGMT-NET and APP-NET?]
+    Q: what are MGMT-NET and APP-NET?
+    A: VLAN segments. APP-NET (10.10.1.0/24) is where prod services run.
+    MGMT-NET (10.10.50.0/24) is management: monitoring, bastion, ops tools.
+    You SSH to prod via bastion host (10.10.50.5) - direct SSH to app servers is not allowed.
+    All monitoring dashboards are on MGMT-NET.
+
+  [Q: who do I call when X is broken?]
+    Q: who do I call when X is broken?
+    A: CBS issues: cbs-ops@company.com or CBS manager on PagerDuty
+    Payments issues: payments-lead on PagerDuty
+    Fraud / model scoring: risktech@company.com
+    Auth / SSO: security-ops@company.com
+    Infra / network: platform-eng@company.com / PE-ONCALL PagerDuty
+    Data warehouse: dataeng@company.com
+    DBA: dba-team@company.com / dba-oncall PagerDuty
+
+  [Q: where is monitoring?]
+    Q: where is monitoring?
+    A: three places:
+    - Zabbix: http://10.10.50.30 (infra, host health, disk, pool usage, kafka lag)
+    - Datadog: https://app.datadoghq.com (APM, application metrics, dashboards)
+    - Kibana: http://10.10.50.50:5601 (logs, from MGMT-NET only)
+    - QRadar: 10.10.50.40 (SIEM, security events only)
+
+  [Q: what is the december freeze?]
+    Q: what is the december freeze?
+    A: After INC-2024-1201 (CBS pool exhaustion at december peak volume), the CTO approved a policy:
+    no production releases December 1-31. The december period has 35% above normal transaction volume.
+    Changes to cope with december (like CBS_DB_POOL_SIZE = 100) are done in October/November.
+    December capacity review is now scheduled for October 2025.
+
+─────────────────────────────────────────────────────────────────
+CONFIDENCE: ✓ HIGH  ██████████  (93%)
+─────────────────────────────────────────────────────────────────
+  • Strong: 6 documents matched the query
+  • Strong relevance score (30.5)
+  • Top source clearly dominant — high specificity
+  • 3 of top sources are well-structured documents
+  • Partial query term match (2 terms found)
+
+─────────────────────────────────────────────────────────────────
+RELATED QUESTIONS
+─────────────────────────────────────────────────────────────────
+  1. What is the current capacity and SLA status of CBS?
+  2. What happens if SEGMENT is changed without CAB approval?
+  3. How do CBS and PAYMENTS-GW interact with each other?
+
+─────────────────────────────────────────────────────────────────
+REFERENCES  —  open source files for complete detail
+─────────────────────────────────────────────────────────────────
+[1] core_network_overview.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Core Network Architecture Overview
+     Folder    : network_architecture
+     Owner     : Infrastructure Team
+     Info      : v3.2 | Updated 2024-11-10
+     Quality   : structured  |  BM25: 30.5  |  Relevance: 100%
+     Matched   : KEY NETWORK SEGMENTS › CORE NETWORK TOPOLOGY › MONITORING
+     Path      : knowledge_base\network_architecture\core_network_overview.txt
+
+[2] monitoring_alerting_guide.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Monitoring and Alerting Infrastructure Guide
+     Folder    : troubleshooting
+     Owner     : Platform Engineering Team
+     Info      : v3.0 | Updated 2025-03-15
+     Quality   : structured  |  BM25: 28.4  |  Relevance: 98%
+     Matched   : ZABBIX › DATADOG APM › ELK STACK
+     Path      : knowledge_base\troubleshooting\monitoring_alerting_guide.txt
+
+[3] port_registry.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Enterprise Port and Protocol Registry
+     Folder    : connectivity_ports
+     Owner     : Network Security Team
+     Info      : v4.1 | Updated 2025-02-20
+     Quality   : structured  |  BM25: 25.9  |  Relevance: 95%
+     Matched   : APPROVED PORTS › REQUESTING A NEW PORT › BLOCKED PORTS
+     Path      : knowledge_base\connectivity_ports\port_registry.txt
+
+[4] network_team_working_notes.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Network Team Working Notes
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated february 2025
+     Quality   : structured  |  BM25: 22.6  |  Relevance: 91%
+     Matched   : VLAN LAYOUT (as of Q4 2024) › MONITORING NETWORK SEGMENTS › DR NETWORK NOTES (secondary site at DR datacenter)
+     Path      : knowledge_base\unstructured_samples\network_team_working_notes.txt
+
+[5] new_analyst_faq.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Analyst Faq
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated may 2025
+     Quality   : structured  |  BM25: 21.4  |  Relevance: 90%
+     Matched   : Q: what are MGMT-NET and APP-NET? › Q: who do I call when X is broken? › Q: where is monitoring?
+     Path      : knowledge_base\unstructured_samples\new_analyst_faq.txt
+
+[6] port_host_quick_reference.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Application Port and Host Quick Reference
+     Folder    : connectivity_ports
+     Owner     : Platform Engineering Team
+     Info      : v1.0 | Updated 2025-05-01
+     Quality   : structured  |  BM25: 21.0  |  Relevance: 89%
+     Matched   : NETWORK SEGMENTS › PURPOSE › CRITICAL RULE
+     Path      : knowledge_base\connectivity_ports\port_host_quick_reference.txt

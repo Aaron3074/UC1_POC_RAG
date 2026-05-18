@@ -1,0 +1,208 @@
+ENTERPRISE KNOWLEDGE ASSISTANT v7 — QUERY OUTPUT
+=================================================================
+Query      : your question here
+Intent     : SUMMARY
+Confidence : HIGH (85%)
+Sources    : 6 document(s)
+Timestamp  : 2026-05-18T11:39:56.543264
+=================================================================
+
+SUMMARY
+─────────────────────────────────────────────────────────────────
+────────────────────────────────────────
+[1] Parameter Notes From Call  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —
+
+  [contact for parameter questions: platform-eng@company.com or raise in #platform-]
+    contact for parameter questions: platform-eng@company.com or raise in #platform-engineering slack
+
+────────────────────────────────────────
+[2] Analyst Faq  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —  |  Updated: may 2025
+
+  [new analyst / new joiner questions answered - compiled from slack threads]
+    new analyst / new joiner questions answered - compiled from slack threads
+    compiled by: platform engineering team
+    this is a living doc - add questions as they come up
+    last updated: may 2025
+
+────────────────────────────────────────
+[3] Analyst Question Log  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —
+
+  [ANALYST QUESTION LOG - platform eng slack #ask-platform]
+    ANALYST QUESTION LOG - platform eng slack #ask-platform
+    compiled by: platform eng team
+    purpose: common questions we keep getting asked. writing them down so we stop repeating ourselves.
+
+  [---]
+    ---
+    Q: how do i get access to the fraud engine dashboards?
+    A: you need the risk-analyst role in keycloak. submit a ServiceNow access request ticket
+    (type: Access Request). your manager needs to approve, then security team provisions it.
+    SLA is 2 business days. if urgent for an investigation, security team can do same-day
+    with manager email approval. contact security-ops@company.com.
+
+────────────────────────────────────────
+[4] New Engineer Onboarding Guide — Platform Overview  [.PPTX]
+  Topic  : Onboarding, System Overview, Access Provisioning, First Steps, Team Contacts
+  Owner  : Platform Engineering + HR  |  v2.4  |  Updated: 2025-02-15
+
+  [SLIDE 1 — Welcome to Platform Engineering]
+    Welcome to the team. This deck covers everything you need to know in your first two weeks.
+    Week 1: System orientation, access provisioning, shadow sessions
+    Week 2: First small task, runbook walkthrough, on-call shadowing
+    Your buddy: Assigned on day one. Ask them anything — no question is too basic.
+    Your manager: Sets your 30/60/90 day goals in your first 1:1.
+    Primary Slack channels:
+    #platform-engineering  — team channel
+    #incidents             — real-time incident updates
+    #releases              — release announcements
+    #schema-changes        — CBS schema change notifications
+    #architecture          — design discussions and ADR reviews
+
+  [SLIDE 3 — Access Provisioning Checklist]
+    Submit an Access Request via ServiceNow on Day 1. Your manager must approve.
+    Standard new engineer access (approved automatically once manager signs off):
+    - Keycloak account (AUTH-SVC) — your SSO for all internal apps
+    - MGMT-NET VPN access — required to SSH to any server
+    - GitHub organisation access (company/platform repos)
+    - Airflow dashboard (read-only) — http://10.10.50.30:8081
+    - Zabbix (read-only) — http://10.10.50.20:8080
+    - Kibana (read-only) — http://10.10.50.50:5601
+    - Confluence and Jira
+    - PagerDuty (observer role until on-call rotation begins)
+    Requires separate approval (Security Team + CISO for sysadmin):
+    - SSH access to production servers (role: sysadmin — time-bound 90 days)
+    - Snowflake DWH full access (role: risk-analyst or above)
+    - QRadar SIEM access
+    - Datadog write access (dashboards and alert modification)
+    SLA for access provisioning: 2 business days standard, same day for onboarding batch.
+
+  [SLIDE 5 — Key Contacts and Escalation]
+    Platform Engineering Lead: Your first escalation for infrastructure and production issues.
+    Security Team: security-ops@company.com — for any auth, access, or compliance issues.
+    Data Engineering: data-eng@company.com — ETL, DWH, Airflow, schema changes.
+    CBS Team: cbs-ops@company.com — Core banking issues.
+    Payments Team: PagerDuty PAYMENTS-ONCALL — payment processing issues.
+    Risk Technology: risktech@company.com — Fraud Engine issues.
+    DPO: dpo@company.com — Data protection and GDPR queries.
+    Compliance: compliance@company.com — Regulatory questions.
+    External:
+    SWIFT Service Desk: +32 2 655 3111 (for SWIFT network issues only)
+    AWS Support: Enterprise tier — 15-min response for critical production issues
+    IBM QRadar: Platinum tier support — via IBM Support Portal
+    Oracle: Premier support — via My Oracle Support (MOS)
+    DO NOT contact external vendors directly without Platform Engineering sign-off.
+    All vendor communications must be logged in ServiceNow.
+
+  [SLIDE 2 — The Technology Stack at a Glance]
+    Core Applications:
+    CBS (Core Banking)         — Java 17, Oracle 19c, host 10.10.1.10:8080
+    PAYMENTS-GW                — Python 3.11, PostgreSQL 15, host 10.10.1.20:9000
+    FRAUD-ENGINE               — Python 3.11, Redis, Kafka, host 10.10.1.30:8500
+    AUTH-SVC (Keycloak)        — host 10.10.1.50:8443 — ALL apps authenticate here
+    REPORTING-SVC              — Python 3.10, host 10.10.1.40:8200
+    SWIFT-ADAPTER              — Java 11, host 10.10.1.60:8090
+    DATA-WAREHOUSE             — Snowflake (cloud, hybrid), fed by nightly ETL
+    Infrastructure:
+    Event streaming: Kafka 3.5.1 (3 brokers, 10.10.1.70-72)
+    Orchestration: Apache Airflow (http://10.10.50.30:8081)
+    Monitoring: Zabbix + Datadog + ELK + QRadar
+    DR: DC-WEST (primary), DC-EAST (hot standby Tier 1 apps)
+    Networks:
+    PROD-NET-01: 10.10.1.0/24 (app servers)
+    PROD-NET-02: 10.10.2.0/24 (databases)
+    MGMT-NET: 10.10.50.0/24 (management — where you SSH from)
+    DMZ-NET: 172.16.1.0/24 (customer-facing)
+
+────────────────────────────────────────
+[5] Architecture Sync Notes Feb2025  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —
+
+  [open questions / parking lot:]
+    open questions / parking lot:
+    - who owns the snowflake cost governance? action: data eng to set up query cost alerts
+    - when does CBS need DBA approval to go above pool size 150? action: DBA team to document
+    - kafka zookeeper to KRaft migration - still targeting Q2 2026. ADR-008 approved in principle.
+
+─────────────────────────────────────────────────────────────────
+CONFIDENCE: ✓ HIGH  ██████████  (85%)
+─────────────────────────────────────────────────────────────────
+  • Strong: 6 documents matched the query
+  • Strong relevance score (18.3)
+  • Some score differentiation between sources
+  • 2 of top sources are well-structured documents
+  • Partial query term match (1 terms found)
+
+─────────────────────────────────────────────────────────────────
+RELATED QUESTIONS
+─────────────────────────────────────────────────────────────────
+  1. What is the current capacity and SLA status of CBS?
+  2. How do CBS and AUTH-SVC interact with each other?
+
+─────────────────────────────────────────────────────────────────
+REFERENCES  —  open source files for complete detail
+─────────────────────────────────────────────────────────────────
+[1] parameter_notes_from_call.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Parameter Notes From Call
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : unstructured  |  BM25: 18.3  |  Relevance: 100%
+     Matched   : contact for parameter questions: platform-eng@company.com or raise in #platform-
+     ⚠ Note    : Unstructured doc — no formal metadata, verify content manually
+     Path      : knowledge_base\unstructured_samples\parameter_notes_from_call.txt
+
+[2] new_analyst_faq.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Analyst Faq
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated may 2025
+     Quality   : structured  |  BM25: 17.8  |  Relevance: 99%
+     Matched   : new analyst / new joiner questions answered - compiled from slack threads
+     Path      : knowledge_base\unstructured_samples\new_analyst_faq.txt
+
+[3] analyst_question_log.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Analyst Question Log
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : structured  |  BM25: 16.0  |  Relevance: 95%
+     Matched   : ANALYST QUESTION LOG - platform eng slack #ask-platform
+     Path      : knowledge_base\unstructured_samples\analyst_question_log.txt
+
+[4] new_engineer_onboarding.pptx  (.PPTX)
+     ───────────────────────────────────────────────────────
+     Title     : New Engineer Onboarding Guide — Platform Overview
+     Folder    : process_workflows
+     Owner     : Platform Engineering + HR
+     Info      : v2.4 | Updated 2025-02-15
+     Quality   : structured  |  BM25: 15.7  |  Relevance: 95%
+     Matched   : SLIDE 1 — Welcome to Platform Engineering › SLIDE 3 — Access Provisioning Checklist › SLIDE 5 — Key Contacts and Escalation
+     Path      : knowledge_base\process_workflows\new_engineer_onboarding.pptx
+
+[5] architecture_sync_notes_feb2025.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Architecture Sync Notes Feb2025
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : partial  |  BM25: 15.7  |  Relevance: 95%
+     Matched   : open questions / parking lot:
+     ℹ Note    : Partially structured — some metadata inferred from filename/folder
+     Path      : knowledge_base\unstructured_samples\architecture_sync_notes_feb2025.txt
+
+[6] architecture_decision_records.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Architecture Decision Records — Core Platform
+     Folder    : architecture_decisions
+     Owner     : Architecture Team
+     Info      : v2.0 | Updated 2025-02-28
+     Quality   : structured  |  BM25: 15.4  |  Relevance: 94%
+     Matched   : SLIDE 7 — OPEN DECISIONS (Pending ARB) › SLIDE 4 — ADR-003: Snowflake for Data Warehouse (Hybrid Model)
+     Path      : knowledge_base\architecture_decisions\architecture_decision_records.txt

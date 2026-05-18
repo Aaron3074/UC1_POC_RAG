@@ -1,0 +1,290 @@
+ENTERPRISE KNOWLEDGE ASSISTANT v7 — QUERY OUTPUT
+=================================================================
+Query      : Walk me through the ETL job failure troubleshooting steps and what causes it
+Intent     : SUMMARY
+Confidence : HIGH (93%)
+Sources    : 6 document(s)
+Timestamp  : 2026-05-18T11:37:26.667763
+=================================================================
+
+SUMMARY
+─────────────────────────────────────────────────────────────────
+────────────────────────────────────────
+[1] Operations Troubleshooting Runbook  [.TXT]
+  Topic  : Troubleshooting, Incident Response, Common Errors
+  Owner  : Platform Engineering Team  |  v6.2  |  Updated: 2025-05-17
+
+  [ISSUE: Reporting Service slow — timeout on report generation]
+    STEPS:
+    1. Check DWH query performance — review query plan in Snowflake console.
+    2. Verify ETL-001 completed — stale DWH data causes report retries.
+    3. Check resource usage: ssh 10.10.1.40, run top or htop.
+    4. Check if CBS_BATCH_WINDOW_START overlaps with RPT-001 start time (I/O contention).
+    ESCALATE: bi-ops@company.com
+
+  [ISSUE: ETL-001 job failed — DWH showing stale data]
+    STEPS:
+    1. Check Airflow at http://10.10.50.30:8081 — find dag_cbs_to_dwh, review task logs.
+    2. Common cause 1: EOD-001 did not complete. Check if /data/exports/eod/YYYYMMDD_eod.csv exists.
+    3. Common cause 2: Snowflake DWH unreachable. Test connectivity from ETL host.
+    4. Common cause 3: Schema mismatch — CBS added column not mapped. Check logs for KeyError.
+    5. Manual re-trigger: In Airflow UI, clear and re-run dag_cbs_to_dwh for the failed date.
+    ESCALATE: Data Engineering on-call if retry fails (PagerDuty: DE-ONCALL).
+
+  [ISSUE: Kafka consumer lag high — Fraud Engine falling behind]
+    SYMPTOMS:
+    - Fraud scoring latency increasing
+    - Consumer lag on fraud.transaction.events > 10,000 messages
+    - PAYMENTS-GW waiting for fraud scores (transaction latency spike)
+    STEPS:
+    1. Check consumer lag: kafka-consumer-groups.sh --bootstrap-server 10.10.1.70:9092 --describe --group fraud-engine-cg-prod
+    High lag (>10,000): Fraud Engine is falling behind.
+    2. Check Fraud Engine CPU: ssh 10.10.1.30, run top. If CPU near 100% during retraining (FRAUD-RETRAIN-001), lag will recover after job completes.
+    3. Check FRAUD_REDIS_TTL_SEC — if recently reduced, recompute load may be overwhelming the engine.
+    4. Check Confluent Control Center: http://10.10.50.40:9021 (MGMT-NET only)
+    5. Do NOT change FRAUD_KAFKA_CONSUMER_GROUP — this resets offset and causes reprocessing of millions of events.
+    ESCALATE: risktech@company.com + platform-eng@company.com
+
+  [ISSUE: CBS returning 503 — core banking unavailable — mainframe down]
+    SYMPTOMS:
+    - HTTP 503 from CBS API at http://10.10.1.10:8080/api/v2
+    - Payments failing because CBS is unavailable
+    - "Core banking unreachable" errors in PAYMENTS-GW logs
+    STEPS:
+    1. Check CBS health: curl http://10.10.1.10:8080/api/v2/health
+    2. SSH to 10.10.1.10 from MGMT-NET: systemctl status cbs
+    3. Check Oracle DB connection pool — CBS_DB_POOL_SIZE default is 100 (was 50 before INC-2024-1201).
+    If pool exhausted: DBA team can increase temporarily. Alert at 80% pool utilisation should have fired.
+    4. Check Oracle DB: sqlplus / as sysdba (from CBS host). Look for lock contention or tablespace full.
+    5. Check CBS_BATCH_WINDOW_START — if during batch window (23:00-01:00), CBS may be under high load.
+    Do not restart CBS during batch window without CBS Team approval.
+    6. Review logs: /var/log/cbs/app.log
+    ESCALATE: cbs-ops@company.com immediately. SEV-1 — CBS down affects all payment processing.
+
+────────────────────────────────────────
+[2] Batch Processing and ETL Workflow Guide  [.TXT]
+  Topic  : Batch Jobs, ETL, Scheduling, Airflow
+  Owner  : Data Engineering Team  |  v2.3  |  Updated: 2024-12-01
+
+  [JOB DEPENDENCY CHAIN]
+    EOD-001 → ETL-001 → RPT-001
+    ↓ (quarterly)
+    FRAUD-RETRAIN-001
+
+  [FAILURE ESCALATION]
+    EOD-001 failure → cbs-ops@company.com + CBS Manager (immediate)
+    ETL-001 failure → Data Engineering on-call (PagerDuty: DE-ONCALL)
+    RPT-001 failure → bi-ops@company.com
+    Any job >2hr overrun → Platform Engineering auto-notified
+    Airflow Dashboard: http://10.10.50.30:8081 (MGMT-NET only)
+    Logs retained: 30 days at /var/log/airflow/
+
+  [NIGHTLY JOB SEQUENCE]
+    JOB: EOD-001 — End of Day Reconciliation
+    Schedule: 23:00 daily
+    System: CBS
+    Duration: ~30 minutes
+    Purpose: Closes business day. Calculates interest accruals, updates balances, generates EOD snapshot.
+    Output: /data/exports/eod/YYYYMMDD_eod.csv
+    On Failure: Alert to cbs-ops@company.com. CBS locked for transactions until resolved.
+    Dependency: Must complete before ETL-001.
+    JOB: ETL-001 — CBS to Data Warehouse Load
+    Schedule: 23:30 daily
+    System: Airflow DAG dag_cbs_to_dwh
+    Duration: ~60 minutes
+    Purpose: Extract CBS EOD snapshot, transform, load into Snowflake DWH.
+    Input: /data/exports/eod/YYYYMMDD_eod.csv
+    Output: DWH tables: fact_transactions, dim_accounts, dim_customers
+    On Failure: Auto-retry once. If second failure, page Data Engineering on-call.
+    Dependency: EOD-001 must complete.
+    JOB: RPT-001 — Regulatory Reporting
+    Schedule: 01:00 daily
+    System: REPORTING-SVC
+    Duration: ~45 minutes
+    Purpose: Generate Basel III liquidity ratios, AML summary, transaction volume reports.
+
+  [OVERVIEW]
+    All scheduled batch jobs run during nightly processing window: 23:00-05:00.
+    Orchestrated via Apache Airflow. Dashboard: http://10.10.50.30:8081 (MGMT-NET only).
+
+────────────────────────────────────────
+[3] Data Eng Etl Dwh Notes  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —  |  Updated: april 2025
+
+  [CONTACTS]
+    CONTACTS
+    data eng team: dataeng@company.com
+    snowflake admin: dataeng@company.com (no separate DBA for Snowflake - it's managed by data eng)
+    ETL issues: dataeng@company.com + platform-eng@company.com if infra related
+
+  [KNOWN ETL ISSUES]
+    KNOWN ETL ISSUES
+    ETL-001 job failure:
+    most common cause: CBS transaction export schema change without ETL team notification
+    INC-2025-0288 root cause: CBS v4.2.0 added beneficiary_account_type column.
+    ETL job failed because the Snowflake staging table didn't have this column.
+    fix: DBA added the column + index. ETL resumed normally.
+    if ETL-001 fails: check /var/log/etl/etl_run.log for schema mismatch errors
+    second most common cause: Snowflake warehouse suspended (cost savings auto-suspend)
+    DWH_SNOWFLAKE_WAREHOUSE = COMPUTE_WH - auto-suspends after 10 min idle
+    ETL job resumes it on next run but first run after suspension takes 60-90 seconds longer
+    this is normal, not an incident
+
+  [data engineering team notes - etl pipelines and dwh]
+    data engineering team notes - etl pipelines and dwh
+    author: data engineering team
+    last updated: april 2025
+    these are working notes not the formal workflow guide
+
+  [ETL PIPELINE OVERVIEW]
+    ETL PIPELINE OVERVIEW
+    the main ETL job is: CBS → Kafka → DWH (Snowflake)
+    - CBS exports transaction data via Kafka topic: cbs.transaction.export
+    - ETL consumer (Python, runs on 10.10.50.60) reads from cbs.transaction.export
+    - transforms and loads into Snowflake fact_transactions table
+    - ETL job runs every 15 minutes via cron (/opt/scripts/etl/run_etl.sh)
+    - ETL job name: ETL-001 (as referenced in operations runbook)
+
+────────────────────────────────────────
+[4] Email Thread Engineering Decisions  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —
+
+  [this came out of INC-2024-0892 (aug 2024) where CBS added beneficiary_account_ty]
+    this came out of INC-2024-0892 (aug 2024) where CBS added beneficiary_account_type
+    without telling us and the nightly ETL failed silently for 2 hours before anyone noticed.
+    regulatory report was 4 hours late. we notified the regulator and they accepted the delay
+    but it cant happen again.
+
+  [1. any new column added to CBS transaction table must be notified to data eng BE]
+    1. any new column added to CBS transaction table must be notified to data eng BEFORE deployment
+    2. use the #schema-changes slack channel
+    3. data eng gets minimum 3 days notice to update ETL mappings
+    4. CBS release checklist now has a mandatory field: "data eng notified Y/N"
+    5. if not notified and ETL breaks, CBS team owns the P1 response
+
+  [FROM: data eng lead]
+    FROM: data eng lead
+    TO: platform eng lead, CBS team lead
+    SUBJECT: RE: RE: RE: CBS schema change notification process
+
+  [just a reminder - do NOT change FRAUD_KAFKA_CONSUMER_GROUP or any other kafka co]
+    just a reminder - do NOT change FRAUD_KAFKA_CONSUMER_GROUP or any other kafka consumer group
+    ID in production without coordinating with the owning team first. changing the consumer group
+    resets the kafka offset to the beginning of the topic. for fraud.transaction.events (12 partitions,
+    7 day retention) this means reprocessing potentially millions of historical payment events.
+    this would overwhelm the fraud engine. not good. coordinate first. always.
+
+────────────────────────────────────────
+[5] Analyst Question Log  [.TXT]
+  Topic  : Unstructured Samples
+  Owner  : —
+
+  [---]
+    ---
+    Q: why is my report showing yesterday's data and not today's?
+    A: the DWH (snowflake) is updated nightly by the ETL pipeline which runs from 23:30.
+    so anything you run before that has data from the previous day (T+1 lag).
+    if you need same-day data you need to query CBS directly - talk to CBS team for read access.
+    if its past midnight and you still see old data, the ETL might have failed - check airflow
+    at http://10.10.50.30:8081 or ask data eng.
+
+  [---]
+    ---
+    Q: the auth service was down for 47 minutes in may 2024. what happened?
+    A: INC-2024-0341. a junior engineer changed the AUTH-SVC config file manually (not via the
+    CI/CD pipeline). the PostgreSQL password had a trailing whitespace. keycloak couldnt connect
+    to its database. since ALL apps validate tokens against AUTH-SVC, 100% of user sessions
+    dropped. 8400 active sessions lost.
+    fix: all config changes now go through CI/CD pipeline only. manual config edits are blocked.
+    keycloak health check now probes DB connectivity not just process health.
+
+  [---]
+    ---
+    Q: who approves access to production database directly?
+    A: production DB direct access requires sysadmin role which needs CISO approval + manager.
+    time-limited to 90 days, all sessions recorded via PAM. not something we give out easily.
+    in 99% of cases you should be using the application APIs or the DWH for data access.
+    what specifically do you need? there might be an API that covers your use case.
+
+  [ANALYST QUESTION LOG - platform eng slack #ask-platform]
+    ANALYST QUESTION LOG - platform eng slack #ask-platform
+    compiled by: platform eng team
+    purpose: common questions we keep getting asked. writing them down so we stop repeating ourselves.
+
+─────────────────────────────────────────────────────────────────
+CONFIDENCE: ✓ HIGH  ██████████  (93%)
+─────────────────────────────────────────────────────────────────
+  • Strong: 6 documents matched the query
+  • Strong relevance score (45.2)
+  • Top source clearly dominant — high specificity
+  • 3 of top sources are well-structured documents
+  • Partial query term match (2 terms found)
+
+─────────────────────────────────────────────────────────────────
+RELATED QUESTIONS
+─────────────────────────────────────────────────────────────────
+  1. What was the full root cause and remediation for INC-2025-0288?
+  2. What is the current capacity and SLA status of DWH?
+  3. What happens if DWH_SNOWFLAKE_WAREHOUSE is changed without CAB approval?
+
+─────────────────────────────────────────────────────────────────
+REFERENCES  —  open source files for complete detail
+─────────────────────────────────────────────────────────────────
+[1] operations_runbook.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Operations Troubleshooting Runbook
+     Folder    : troubleshooting
+     Owner     : Platform Engineering Team
+     Info      : v6.2 | Updated 2025-05-17
+     Quality   : structured  |  BM25: 45.2  |  Relevance: 100%
+     Matched   : ISSUE: Reporting Service slow — timeout on report generation › ISSUE: ETL-001 job failed — DWH showing stale data › ISSUE: Kafka consumer lag high — Fraud Engine falling behind
+     Path      : knowledge_base\troubleshooting\operations_runbook.txt
+
+[2] batch_etl_workflow_guide.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Batch Processing and ETL Workflow Guide
+     Folder    : process_workflows
+     Owner     : Data Engineering Team
+     Info      : v2.3 | Updated 2024-12-01
+     Quality   : structured  |  BM25: 43.5  |  Relevance: 99%
+     Matched   : JOB DEPENDENCY CHAIN › FAILURE ESCALATION › NIGHTLY JOB SEQUENCE
+     Path      : knowledge_base\process_workflows\batch_etl_workflow_guide.txt
+
+[3] data_eng_etl_dwh_notes.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Data Eng Etl Dwh Notes
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated april 2025
+     Quality   : structured  |  BM25: 39.1  |  Relevance: 96%
+     Matched   : CONTACTS › KNOWN ETL ISSUES › data engineering team notes - etl pipelines and dwh
+     Path      : knowledge_base\unstructured_samples\data_eng_etl_dwh_notes.txt
+
+[4] email_thread_engineering_decisions.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Email Thread Engineering Decisions
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : structured  |  BM25: 39.0  |  Relevance: 96%
+     Matched   : this came out of INC-2024-0892 (aug 2024) where CBS added beneficiary_account_ty › 1. any new column added to CBS transaction table must be notified to data eng BE › FROM: data eng lead
+     Path      : knowledge_base\unstructured_samples\email_thread_engineering_decisions.txt
+
+[5] analyst_question_log.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Analyst Question Log
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : structured  |  BM25: 36.6  |  Relevance: 94%
+     Path      : knowledge_base\unstructured_samples\analyst_question_log.txt
+
+[6] architecture_sync_notes_feb2025.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Architecture Sync Notes Feb2025
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : partial  |  BM25: 35.3  |  Relevance: 93%
+     Matched   : DATA ENGINEERING: › SECURITY: › RISK TECH:
+     ℹ Note    : Partially structured — some metadata inferred from filename/folder
+     Path      : knowledge_base\unstructured_samples\architecture_sync_notes_feb2025.txt

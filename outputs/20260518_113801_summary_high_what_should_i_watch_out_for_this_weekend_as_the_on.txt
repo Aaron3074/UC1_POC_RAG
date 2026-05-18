@@ -1,0 +1,303 @@
+ENTERPRISE KNOWLEDGE ASSISTANT v7 — QUERY OUTPUT
+=================================================================
+Query      : What should I watch out for this weekend as the on-call engineer?
+Intent     : SUMMARY
+Confidence : HIGH (85%)
+Sources    : 6 document(s)
+Timestamp  : 2026-05-18T11:38:01.013425
+=================================================================
+
+SUMMARY
+─────────────────────────────────────────────────────────────────
+────────────────────────────────────────
+[1] Escalation Contacts Adhoc  [.XLSX]
+  Topic  : Unstructured Samples
+  Owner  : —
+
+  [Section 4]
+    Support Portal | Platinum tier
+    Compliance / Legal / DPO
+    DPO | dpo@company.com | GDPR queries, data subject requests
+    Compliance | compliance@company.com
+    Legal | legal@company.com
+    On-call rotation
+    Managed in PagerDuty
+    Teams on rotation | Platform Eng, Data Eng, Payments, Security
+    Rotation frequency | Weekly
+    If no ack in 10 min | Escalates to team lead automatically
+    DO NOT contact vendors directly without Platform Engineering sign-off
+    All vendor comms must be logged in Servic
+
+  [Section 5]
+    t vendors directly without Platform Engineering sign-off
+    All vendor comms must be logged in ServiceNow
+
+  [Section 3]
+    30:8081 first
+    Platform Engineering (infra, monitoring, kafka, releases)
+    Email | platform-eng@company.com
+    PagerDuty | PE-ONCALL
+    External vendors
+    SWIFT Service Desk | +32 2 655 3111 | Only call for actual SWIFT network issues
+    AWS Support | Enterprise tier | 15 min response for critical prod issues
+    Oracle Support | My Oracle Support portal | Premier support for CBS DB
+    IBM QRadar | IBM Support Portal | Platinum tier
+    Compliance / Legal / DPO
+    DPO | dpo@company.com | GDPR queries, d
+
+  [Section 2]
+    model issues or false positives - always loop in Risk Tech before changing FRAUD_REDIS_TTL_SEC or PAYMENTS-GW_FRAUD_THRESHOLD
+    Auth / SSO / Keycloak
+    Security team | security-ops@company.com
+    Note | Sev-1 if more than 100 users affected - escalate immediately
+    Data / ETL / Warehouse
+    Email | data-eng@company.com
+    PagerDuty | DE-ONCALL
+    Note | ETL failures: check Airflow at http://10.10.50.30:8081 first
+    Platform Engineering (infra, monitoring, kafka, releases)
+    Email | platform-eng@com
+
+────────────────────────────────────────
+[2] Batch Processing and ETL Workflow Guide  [.TXT]
+  Topic  : Batch Jobs, ETL, Scheduling, Airflow
+  Owner  : Data Engineering Team  |  v2.3  |  Updated: 2024-12-01
+
+  [FAILURE ESCALATION]
+    EOD-001 failure → cbs-ops@company.com + CBS Manager (immediate)
+    ETL-001 failure → Data Engineering on-call (PagerDuty: DE-ONCALL)
+    RPT-001 failure → bi-ops@company.com
+    Any job >2hr overrun → Platform Engineering auto-notified
+    Airflow Dashboard: http://10.10.50.30:8081 (MGMT-NET only)
+    Logs retained: 30 days at /var/log/airflow/
+
+  [NIGHTLY JOB SEQUENCE]
+    JOB: EOD-001 — End of Day Reconciliation
+    Schedule: 23:00 daily
+    System: CBS
+    Duration: ~30 minutes
+    Purpose: Closes business day. Calculates interest accruals, updates balances, generates EOD snapshot.
+    Output: /data/exports/eod/YYYYMMDD_eod.csv
+    On Failure: Alert to cbs-ops@company.com. CBS locked for transactions until resolved.
+    Dependency: Must complete before ETL-001.
+    JOB: ETL-001 — CBS to Data Warehouse Load
+    Schedule: 23:30 daily
+    System: Airflow DAG dag_cbs_to_dwh
+    Duration: ~60 minutes
+    Purpose: Extract CBS EOD snapshot, transform, load into Snowflake DWH.
+    Input: /data/exports/eod/YYYYMMDD_eod.csv
+    Output: DWH tables: fact_transactions, dim_accounts, dim_customers
+    On Failure: Auto-retry once. If second failure, page Data Engineering on-call.
+    Dependency: EOD-001 must complete.
+    JOB: RPT-001 — Regulatory Reporting
+    Schedule: 01:00 daily
+    System: REPORTING-SVC
+    Duration: ~45 minutes
+    Purpose: Generate Basel III liquidity ratios, AML summary, transaction volume reports.
+
+────────────────────────────────────────
+[3] Monitoring and Alerting Infrastructure Guide  [.TXT]
+  Topic  : Monitoring, Zabbix, Datadog, ELK, SIEM, Alerting
+  Owner  : Platform Engineering Team  |  v3.0  |  Updated: 2025-03-15
+
+  [ALERTING ROUTING]
+    Infrastructure (Zabbix) → platform-eng@company.com
+    APM SLO breaches (Datadog) → PagerDuty (severity by breach level)
+    Security offenses (QRadar) → Email + PagerDuty (Sev 1)
+    ETL failures (Airflow) → data-eng@company.com
+    On-call rotation: Weekly, managed in PagerDuty.
+    Teams: Platform Engineering, Data Engineering, Payments, Security.
+    Escalation: No ack in 10 minutes → team lead.
+
+  [DATADOG APM]
+    SLOs:
+    CBS API: p99 latency < 500ms
+    PAYMENTS-GW: p99 latency < 2 seconds
+    FRAUD-ENGINE scoring: p99 latency < 200ms
+    AUTH-SVC token validation: p99 latency < 100ms
+    Dashboards:
+    Core Banking Health — CBS and Payments overview
+    Security Overview — Auth failures, suspicious patterns
+    ETL Pipeline — Batch job status and durations
+    Datadog alerts route to PagerDuty.
+
+────────────────────────────────────────
+[4] Operations Troubleshooting Runbook  [.TXT]
+  Topic  : Troubleshooting, Incident Response, Common Errors
+  Owner  : Platform Engineering Team  |  v6.2  |  Updated: 2025-05-17
+
+  [ISSUE: ETL-001 job failed — DWH showing stale data]
+    STEPS:
+    1. Check Airflow at http://10.10.50.30:8081 — find dag_cbs_to_dwh, review task logs.
+    2. Common cause 1: EOD-001 did not complete. Check if /data/exports/eod/YYYYMMDD_eod.csv exists.
+    3. Common cause 2: Snowflake DWH unreachable. Test connectivity from ETL host.
+    4. Common cause 3: Schema mismatch — CBS added column not mapped. Check logs for KeyError.
+    5. Manual re-trigger: In Airflow UI, clear and re-run dag_cbs_to_dwh for the failed date.
+    ESCALATE: Data Engineering on-call if retry fails (PagerDuty: DE-ONCALL).
+
+  [GENERAL CONTACTS]
+    Platform Engineering: platform-eng@company.com | PagerDuty: PE-ONCALL
+    Network Security: security-ops@company.com
+    CBS Team: cbs-ops@company.com
+    Data Engineering: data-eng@company.com | PagerDuty: DE-ONCALL
+    Payments Team: PagerDuty: PAYMENTS-ONCALL
+    Risk Technology: risktech@company.com
+    BI Team: bi-ops@company.com
+
+  [ISSUE: Payments Gateway not processing — HTTP 503/504]
+    STEPS:
+    1. Check health: GET http://10.10.1.20:9000/payments/health (expected: status ok)
+    2. SSH to 10.10.1.20 from MGMT-NET. Check: systemctl status payments-gw
+    3. Check FRAUD-ENGINE: curl http://10.10.1.30:8500/fraud/score/health
+    PAYMENTS-GW calls FRAUD-ENGINE synchronously. If Fraud Engine is down, payments are blocked.
+    4. Check CBS: curl http://10.10.1.10:8080/api/v2/health
+    5. Review logs: /var/log/payments-gw/app.log — look for ConnectionRefused or Timeout errors.
+    ESCALATE: If unresolved 15 minutes, page PAYMENTS-ONCALL (PagerDuty).
+
+  [ISSUE: Fraud Engine high false positives blocking legitimate payments]
+    STEPS:
+    1. Verify PAYMENTS-GW_FRAUD_THRESHOLD. Default 0.75. Lower value blocks more payments.
+    2. Check FRAUD_MODEL_VERSION — if recently updated, model may need recalibration.
+    3. Check FRAUD_REDIS_TTL_SEC — stale cached scores can cause issues.
+    4. Flush Redis cache if stale scores suspected (coordinate with Risk Tech team first):
+    redis-cli -h 10.10.1.30 -p 6379 FLUSHDB
+    5. Review logs: /var/log/fraud-engine/scoring.log
+    ESCALATE: risktech@company.com
+
+────────────────────────────────────────
+[5] New Engineer Onboarding Guide — Platform Overview  [.PPTX]
+  Topic  : Onboarding, System Overview, Access Provisioning, First Steps, Team Contacts
+  Owner  : Platform Engineering + HR  |  v2.4  |  Updated: 2025-02-15
+
+  [SLIDE 1 — Welcome to Platform Engineering]
+    Welcome to the team. This deck covers everything you need to know in your first two weeks.
+    Week 1: System orientation, access provisioning, shadow sessions
+    Week 2: First small task, runbook walkthrough, on-call shadowing
+    Your buddy: Assigned on day one. Ask them anything — no question is too basic.
+    Your manager: Sets your 30/60/90 day goals in your first 1:1.
+    Primary Slack channels:
+    #platform-engineering  — team channel
+    #incidents             — real-time incident updates
+    #releases              — release announcements
+    #schema-changes        — CBS schema change notifications
+    #architecture          — design discussions and ADR reviews
+
+  [SLIDE 3 — Access Provisioning Checklist]
+    Submit an Access Request via ServiceNow on Day 1. Your manager must approve.
+    Standard new engineer access (approved automatically once manager signs off):
+    - Keycloak account (AUTH-SVC) — your SSO for all internal apps
+    - MGMT-NET VPN access — required to SSH to any server
+    - GitHub organisation access (company/platform repos)
+    - Airflow dashboard (read-only) — http://10.10.50.30:8081
+    - Zabbix (read-only) — http://10.10.50.20:8080
+    - Kibana (read-only) — http://10.10.50.50:5601
+    - Confluence and Jira
+    - PagerDuty (observer role until on-call rotation begins)
+    Requires separate approval (Security Team + CISO for sysadmin):
+    - SSH access to production servers (role: sysadmin — time-bound 90 days)
+    - Snowflake DWH full access (role: risk-analyst or above)
+    - QRadar SIEM access
+    - Datadog write access (dashboards and alert modification)
+    SLA for access provisioning: 2 business days standard, same day for onboarding batch.
+
+  [METADATA]
+    DOCUMENT: New Engineer Onboarding Guide — Platform Overview
+    TOPIC: Onboarding, System Overview, Access Provisioning, First Steps, Team Contacts
+    VERSION: 2.4
+    LAST UPDATED: 2025-02-15
+    OWNER: Platform Engineering + HR
+    SOURCE_FORMAT: PowerPoint Presentation
+
+  [SLIDE 5 — Key Contacts and Escalation]
+    Platform Engineering Lead: Your first escalation for infrastructure and production issues.
+    Security Team: security-ops@company.com — for any auth, access, or compliance issues.
+    Data Engineering: data-eng@company.com — ETL, DWH, Airflow, schema changes.
+    CBS Team: cbs-ops@company.com — Core banking issues.
+    Payments Team: PagerDuty PAYMENTS-ONCALL — payment processing issues.
+    Risk Technology: risktech@company.com — Fraud Engine issues.
+    DPO: dpo@company.com — Data protection and GDPR queries.
+    Compliance: compliance@company.com — Regulatory questions.
+    External:
+    SWIFT Service Desk: +32 2 655 3111 (for SWIFT network issues only)
+    AWS Support: Enterprise tier — 15-min response for critical production issues
+    IBM QRadar: Platinum tier support — via IBM Support Portal
+    Oracle: Premier support — via My Oracle Support (MOS)
+    DO NOT contact external vendors directly without Platform Engineering sign-off.
+    All vendor communications must be logged in ServiceNow.
+
+─────────────────────────────────────────────────────────────────
+CONFIDENCE: ✓ HIGH  ██████████  (85%)
+─────────────────────────────────────────────────────────────────
+  • Strong: 6 documents matched the query
+  • Strong relevance score (15.7)
+  • Some score differentiation between sources
+  • 2 of top sources are well-structured documents
+  • Partial query term match (1 terms found)
+
+─────────────────────────────────────────────────────────────────
+RELATED QUESTIONS
+─────────────────────────────────────────────────────────────────
+  1. What is the current capacity and SLA status of CBS?
+  2. What happens if ENGINE is changed without CAB approval?
+  3. How do CBS and ETL interact with each other?
+
+─────────────────────────────────────────────────────────────────
+REFERENCES  —  open source files for complete detail
+─────────────────────────────────────────────────────────────────
+[1] escalation_contacts_adhoc.xlsx  (.XLSX)
+     ───────────────────────────────────────────────────────
+     Title     : Escalation Contacts Adhoc
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : partial  |  BM25: 15.7  |  Relevance: 100%
+     ℹ Note    : Partially structured — some metadata inferred from filename/folder
+     Path      : knowledge_base\unstructured_samples\escalation_contacts_adhoc.xlsx
+
+[2] batch_etl_workflow_guide.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Batch Processing and ETL Workflow Guide
+     Folder    : process_workflows
+     Owner     : Data Engineering Team
+     Info      : v2.3 | Updated 2024-12-01
+     Quality   : structured  |  BM25: 15.4  |  Relevance: 99%
+     Matched   : FAILURE ESCALATION › NIGHTLY JOB SEQUENCE
+     Path      : knowledge_base\process_workflows\batch_etl_workflow_guide.txt
+
+[3] monitoring_alerting_guide.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Monitoring and Alerting Infrastructure Guide
+     Folder    : troubleshooting
+     Owner     : Platform Engineering Team
+     Info      : v3.0 | Updated 2025-03-15
+     Quality   : structured  |  BM25: 15.1  |  Relevance: 98%
+     Matched   : ALERTING ROUTING › DATADOG APM
+     Path      : knowledge_base\troubleshooting\monitoring_alerting_guide.txt
+
+[4] operations_runbook.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Operations Troubleshooting Runbook
+     Folder    : troubleshooting
+     Owner     : Platform Engineering Team
+     Info      : v6.2 | Updated 2025-05-17
+     Quality   : structured  |  BM25: 13.7  |  Relevance: 95%
+     Matched   : ISSUE: ETL-001 job failed — DWH showing stale data › GENERAL CONTACTS › ISSUE: Payments Gateway not processing — HTTP 503/504
+     Path      : knowledge_base\troubleshooting\operations_runbook.txt
+
+[5] new_engineer_onboarding.pptx  (.PPTX)
+     ───────────────────────────────────────────────────────
+     Title     : New Engineer Onboarding Guide — Platform Overview
+     Folder    : process_workflows
+     Owner     : Platform Engineering + HR
+     Info      : v2.4 | Updated 2025-02-15
+     Quality   : structured  |  BM25: 13.4  |  Relevance: 94%
+     Matched   : SLIDE 1 — Welcome to Platform Engineering › SLIDE 3 — Access Provisioning Checklist › METADATA
+     Path      : knowledge_base\process_workflows\new_engineer_onboarding.pptx
+
+[6] parameter_notes_from_call.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Parameter Notes From Call
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : unstructured  |  BM25: 13.2  |  Relevance: 94%
+     Matched   : contact for parameter questions: platform-eng@company.com or raise in #platform- › general rule: any parameter change in prod needs a CAB ticket. even if it seems  › FRAUD ENGINE stuff:
+     ⚠ Note    : Unstructured doc — no formal metadata, verify content manually
+     Path      : knowledge_base\unstructured_samples\parameter_notes_from_call.txt

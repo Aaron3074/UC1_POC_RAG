@@ -1,0 +1,283 @@
+ENTERPRISE KNOWLEDGE ASSISTANT v7 — QUERY OUTPUT
+=================================================================
+Query      : I am a new analyst. What is the difference between CBS and the Payments Gateway?
+Intent     : COMPARISON
+Confidence : HIGH (100%)
+Sources    : 6 document(s)
+Timestamp  : 2026-05-18T11:39:41.046974
+=================================================================
+
+COMPARISON
+─────────────────────────────────────────────────────────────────
+Comparing across 5 sources
+
+────────────────────────────────────────
+[1] Analyst Faq
+     File: new_analyst_faq.txt  (.TXT)  |  Folder: unstructured_samples
+
+  ▸ Q: what's the difference between CBS and Payments Gateway?
+      Q: what's the difference between CBS and Payments Gateway?
+      A: CBS is the backend account ledger. Payments Gateway (PAYMENTS-GW) is the transaction processor.
+    → When a payment happens: Payments GW receives it → calls Fraud Engine for a risk score →
+      calls CBS to debit/credit the accounts → returns confirmation.
+      CBS doesn't talk to the outside world. Payments GW does.
+      PAYMENTS-GW host: 10.10.1.20, Port: 9000.
+
+  ▸ Q: what is the SLA for CBS / payments?
+      Q: what is the SLA for CBS / payments?
+    → A: CBS SLA: 99.9% availability (target), 99.87% actual Q1 2025 (below target due to INC-2024-1201)
+    → Payments GW SLA: 99.95% target, 99.91% actual Q1 2025
+    → Full SLA register is in sla_register_and_actuals.txt in the knowledge base.
+
+  ▸ Q: who do I call when X is broken?
+      Q: who do I call when X is broken?
+      A: CBS issues: cbs-ops@company.com or CBS manager on PagerDuty
+      Payments issues: payments-lead on PagerDuty
+    → Fraud / model scoring: risktech@company.com
+      Auth / SSO: security-ops@company.com
+      Infra / network: platform-eng@company.com / PE-ONCALL PagerDuty
+      Data warehouse: dataeng@company.com
+      DBA: dba-team@company.com / dba-oncall PagerDuty
+
+  ▸ Q: what is CBS?
+      Q: what is CBS?
+      A: Core Banking System. It's the mainframe-era system that holds all account data, balances, and
+      transaction history. When people say "the core", "the mainframe", or "account system" they mean CBS.
+      Host: 10.10.1.10, Port: 8080. API endpoint: http://10.10.1.10:8080/api/v2/
+      CBS is owned by the CBS team (cbs-ops@company.com). Platform eng does the infra.
+
+────────────────────────────────────────
+[2] Access Control and IAM Policy
+     File: access_control_iam_policy.txt  (.TXT)  |  Folder: process_workflows
+     Version: 2.1  |  Owner: Security Team
+
+  ▸ ROLE DEFINITIONS
+      ROLE: analyst
+      Access: REPORTING-SVC (read), DWH (read, restricted tables)
+      Restricted: CBS direct DB, PAYMENTS-GW admin, FRAUD-ENGINE config
+      ROLE: ops-user
+      Access: Airflow (monitor only), Zabbix (read), REPORTING-SVC (read), CBS (read)
+      Restricted: Production DB direct access, SSH to PROD-NET
+      ROLE: payments-operator
+      Access: PAYMENTS-GW admin panel, CBS (read)
+      Restricted: Fraud Engine config, SWIFT audit logs (requires CISO approval)
+      ROLE: sysadmin
+      Access: All systems
+      Restrictions: All actions logged to immutable audit trail. PAM required for production DB.
+    → ROLE: risk-analyst
+      Access: FRAUD-ENGINE (config read, model metrics), DWH (full), REPORTING-SVC
+      Restricted: Direct SWIFT logs, Customer PII (requires DPO approval)
+
+  ▸ PROVISIONING PROCESS
+      1. Manager submits access request via ServiceNow (ticket type: Access Request).
+    → 2. Application owner approves within 2 business days.
+      3. Security Team provisions role in Keycloak.
+      4. User receives email. Access reviewed quarterly.
+      PRIVILEGED ACCESS (sysadmin):
+      - Requires CISO approval + manager sign-off.
+      - Time-bound: maximum 90 days, then must renew.
+      - All sessions recorded via PAM tool.
+
+  ▸ OVERVIEW
+      All application access managed via AUTH-SVC (Keycloak).
+      No application should maintain its own user database.
+
+  ▸ OFFBOARDING
+      HR notifies Security Team on last working day.
+      All accounts disabled within 4 hours.
+      Accounts deleted within 30 days.
+
+────────────────────────────────────────
+[3] Slack Incident Thread Dec2024
+     File: slack_incident_thread_dec2024.txt  (.TXT)  |  Folder: unstructured_samples
+
+  ▸ [10:05] cbs_team_lead: good idea. CBS pool, payments GW capacity, fraud engine.
+      [10:05] cbs_team_lead: good idea. CBS pool, payments GW capacity, fraud engine.
+      all need to be reviewed in november before the december rush.
+
+  ▸ [09:49] payments_lead: seeing it from payments side too. payments GW cant reach 
+      [09:49] payments_lead: seeing it from payments side too. payments GW cant reach CBS.
+      all payment transactions failing. declaring SEV-1.
+
+  ▸ [09:53] dba_team: done. CBS_DB_POOL_SIZE = 80 as emergency.
+      [09:53] dba_team: done. CBS_DB_POOL_SIZE = 80 as emergency.
+      give it 2-3 min to take effect as existing connections drain.
+
+  ▸ [10:00] dba_team: permanent fix approved. CBS_DB_POOL_SIZE = 100.
+      [10:00] dba_team: permanent fix approved. CBS_DB_POOL_SIZE = 100.
+      adding monitoring alert at 80% pool utilisation.
+
+────────────────────────────────────────
+[4] Operations Troubleshooting Runbook
+     File: operations_runbook.txt  (.TXT)  |  Folder: troubleshooting
+     Version: 6.2  |  Owner: Platform Engineering Team
+
+  ▸ ISSUE: Users getting 403 Forbidden — access denied — permission denied — wrong role
+      SYMPTOMS:
+      - Specific user can log in but gets 403 on certain operations
+      - "Insufficient permissions" or "Access denied" errors
+      - User can access some apps but not others
+      STEPS:
+      1. Confirm user can authenticate (if 401 and 403 both, fix 401 first)
+    → 2. Check user's role in Keycloak Admin Console → Users → [username] → Role Mappings
+      3. Verify the correct role is assigned for the application they need:
+      analyst role       → REPORTING-SVC read, DWH read (restricted)
+      ops-user role      → Airflow monitor, Zabbix read, CBS read
+      payments-operator  → PAYMENTS-GW admin, CBS read
+      sysadmin role      → All systems (requires CISO approval, 90-day time limit)
+    → risk-analyst role  → FRAUD-ENGINE config read, DWH full
+      4. If role needs to be added: submit ServiceNow Access Request ticket (SLA: 2 business days)
+      5. If urgent: Security team can provision same-day for production incidents
+      ESCALATE: security-ops@company.com
+
+  ▸ ISSUE: Payments Gateway not processing — HTTP 503/504
+      STEPS:
+    → 1. Check health: GET http://10.10.1.20:9000/payments/health (expected: status ok)
+    → 2. SSH to 10.10.1.20 from MGMT-NET. Check: systemctl status payments-gw
+      3. Check FRAUD-ENGINE: curl http://10.10.1.30:8500/fraud/score/health
+      PAYMENTS-GW calls FRAUD-ENGINE synchronously. If Fraud Engine is down, payments are blocked.
+      4. Check CBS: curl http://10.10.1.10:8080/api/v2/health
+      5. Review logs: /var/log/payments-gw/app.log — look for ConnectionRefused or Timeout errors.
+      ESCALATE: If unresolved 15 minutes, page PAYMENTS-ONCALL (PagerDuty).
+
+  ▸ ISSUE: CBS returning 503 — core banking unavailable — mainframe down
+      SYMPTOMS:
+      - HTTP 503 from CBS API at http://10.10.1.10:8080/api/v2
+      - Payments failing because CBS is unavailable
+      - "Core banking unreachable" errors in PAYMENTS-GW logs
+      STEPS:
+      1. Check CBS health: curl http://10.10.1.10:8080/api/v2/health
+    → 2. SSH to 10.10.1.10 from MGMT-NET: systemctl status cbs
+    → 3. Check Oracle DB connection pool — CBS_DB_POOL_SIZE default is 100 (was 50 before INC-2024-1201).
+      If pool exhausted: DBA team can increase temporarily. Alert at 80% pool utilisation should have fired.
+      4. Check Oracle DB: sqlplus / as sysdba (from CBS host). Look for lock contention or tablespace full.
+      5. Check CBS_BATCH_WINDOW_START — if during batch window (23:00-01:00), CBS may be under high load.
+      Do not restart CBS during batch window without CBS Team approval.
+      6. Review logs: /var/log/cbs/app.log
+      ESCALATE: cbs-ops@company.com immediately. SEV-1 — CBS down affects all payment processing.
+
+  ▸ GENERAL CONTACTS
+      Platform Engineering: platform-eng@company.com | PagerDuty: PE-ONCALL
+      Network Security: security-ops@company.com
+      CBS Team: cbs-ops@company.com
+      Data Engineering: data-eng@company.com | PagerDuty: DE-ONCALL
+      Payments Team: PagerDuty: PAYMENTS-ONCALL
+    → Risk Technology: risktech@company.com
+      BI Team: bi-ops@company.com
+
+────────────────────────────────────────
+[5] Parameter Notes From Call
+     File: parameter_notes_from_call.txt  (.TXT)  |  Folder: unstructured_samples
+
+  ▸ PAYMENTS GATEWAY:
+      PAYMENTS GATEWAY:
+      - PAYMENTS-GW_TXN_TIMEOUT = 30000ms (30 seconds). multiply by CBS_MAX_TXN_RETRY and you get
+      90 sec worst case for a transaction to fail completely.
+      - PAYMENTS-GW_MAX_PAYLOAD_SIZE_MB = 5.0. requests above this get HTTP 413.
+
+  ▸ CORE BANKING (CBS) stuff:
+      CORE BANKING (CBS) stuff:
+      - CBS_DB_POOL_SIZE was 50, is now 100 (fixed after the dec 2024 incident where we ran out of
+      connections during peak load). if you want to go above 150 you need DBA approval.
+      - CBS_SESSION_TIMEOUT_SEC = 1800 (30 min). PCI-DSS says minimum 900 seconds (15 min), max
+      3600 (60 min). dont go below 900 or youll fail the audit.
+      - CBS_BATCH_WINDOW_START = 23:00 - this is when EOD reconciliation kicks off. the DWH ETL
+      starts at 23:30 so there's a 30 min buffer. dont change these without telling data eng.
+    → - CBS_MAX_TXN_RETRY = 3. dont set above 5 or you risk duplicate transactions.
+
+  ▸ FRAUD ENGINE stuff:
+      FRAUD ENGINE stuff:
+      - FRAUD_REDIS_TTL_SEC is currently 3600 (one hour). DO NOT change this without platform eng
+    → sign off. when risk tech changed it to 300 in dec 2024 redis ran out of memory and we had
+      a 138 min outage. the redis memory limit is 32GB and at 300sec TTL we were writing 12x more
+      frequently than the memory could handle.
+      - FRAUD_MODEL_VERSION is currently v3.2.1 (was briefly v3.3.0 but that got rolled back because
+      of the NaN bug with null merchant codes). v3.4.0 is coming in may 2025.
+    → - FRAUD_KAFKA_CONSUMER_GROUP = "fraud-engine-cg-prod" - if you change this it resets the
+      kafka offset and reprocesses all historical messages. bad idea in prod. coordinate first.
+    → - PAYMENTS-GW_FRAUD_THRESHOLD = 0.75 by default. if you lower it you get more false positives
+    → (legitimate payments getting blocked). if risk tech wants to change this they need to tell
+      platform eng and payments team first.
+
+  ▸ contact for parameter questions: platform-eng@company.com or raise in #platform-
+      contact for parameter questions: platform-eng@company.com or raise in #platform-engineering slack
+
+────────────────────────────────────────
+KEY DIFFERENTIATORS
+
+─────────────────────────────────────────────────────────────────
+CONFIDENCE: ✓ HIGH  ██████████  (100%)
+─────────────────────────────────────────────────────────────────
+  • Strong: 6 documents matched the query
+  • Strong relevance score (53.7)
+  • Top source clearly dominant — high specificity
+  • 3 of top sources are well-structured documents
+  • Exact query terms found in source (5 matches)
+
+─────────────────────────────────────────────────────────────────
+RELATED QUESTIONS
+─────────────────────────────────────────────────────────────────
+  1. What is the current implementation status of CBS?
+  2. What architecture decisions are still open and pending ARB approval?
+
+─────────────────────────────────────────────────────────────────
+REFERENCES  —  open source files for complete detail
+─────────────────────────────────────────────────────────────────
+[1] new_analyst_faq.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Analyst Faq
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated may 2025
+     Quality   : structured  |  BM25: 53.7  |  Relevance: 100%
+     Matched   : Q: what's the difference between CBS and Payments Gateway? › Q: what is the SLA for CBS / payments? › Q: who do I call when X is broken?
+     Path      : knowledge_base\unstructured_samples\new_analyst_faq.txt
+
+[2] access_control_iam_policy.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Access Control and IAM Policy
+     Folder    : process_workflows
+     Owner     : Security Team
+     Info      : v2.1 | Updated 2025-02-01
+     Quality   : structured  |  BM25: 47.9  |  Relevance: 97%
+     Matched   : ROLE DEFINITIONS › PROVISIONING PROCESS › OVERVIEW
+     Path      : knowledge_base\process_workflows\access_control_iam_policy.txt
+
+[3] slack_incident_thread_dec2024.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Slack Incident Thread Dec2024
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : structured  |  BM25: 46.4  |  Relevance: 96%
+     Matched   : [10:05] cbs_team_lead: good idea. CBS pool, payments GW capacity, fraud engine. › [09:49] payments_lead: seeing it from payments side too. payments GW cant reach  › [09:53] dba_team: done. CBS_DB_POOL_SIZE = 80 as emergency.
+     Path      : knowledge_base\unstructured_samples\slack_incident_thread_dec2024.txt
+
+[4] operations_runbook.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Operations Troubleshooting Runbook
+     Folder    : troubleshooting
+     Owner     : Platform Engineering Team
+     Info      : v6.2 | Updated 2025-05-17
+     Quality   : structured  |  BM25: 45.5  |  Relevance: 95%
+     Matched   : ISSUE: Users getting 403 Forbidden — access denied — permission denied — wrong role › ISSUE: Payments Gateway not processing — HTTP 503/504 › ISSUE: CBS returning 503 — core banking unavailable — mainframe down
+     Path      : knowledge_base\troubleshooting\operations_runbook.txt
+
+[5] parameter_notes_from_call.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Parameter Notes From Call
+     Folder    : unstructured_samples
+     Owner     : —
+     Quality   : unstructured  |  BM25: 45.1  |  Relevance: 95%
+     Matched   : PAYMENTS GATEWAY: › CORE BANKING (CBS) stuff: › FRAUD ENGINE stuff:
+     ⚠ Note    : Unstructured doc — no formal metadata, verify content manually
+     Path      : knowledge_base\unstructured_samples\parameter_notes_from_call.txt
+
+[6] swift_payments_ops_notes.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Swift Payments Ops Notes
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated january 2025
+     Quality   : structured  |  BM25: 45.0  |  Relevance: 95%
+     Matched   : CRITICAL TIMINGS › HOW A PAYMENT FLOWS (step by step for new people) › SWIFT_ADAPTER HOST AND PORT
+     Path      : knowledge_base\unstructured_samples\swift_payments_ops_notes.txt

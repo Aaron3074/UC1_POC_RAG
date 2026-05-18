@@ -1,0 +1,469 @@
+ENTERPRISE KNOWLEDGE ASSISTANT v7 — QUERY OUTPUT
+=================================================================
+Query      : When does the SWIFT certificate expire and what is the renewal lead time?
+Intent     : ANALYTICAL
+Confidence : HIGH (100%)
+Sources    : 6 document(s)
+Timestamp  : 2026-05-18T11:39:22.392206
+=================================================================
+
+ANALYTICAL BRIEF
+─────────────────────────────────────────────────────────────────
+Query: When does the SWIFT certificate expire and what is the renewal lead time?
+
+FINDINGS BY SOURCE
+────────────────────────────────────────
+
+[1] Swift Payments Ops Notes  [.TXT]  [unstructured_samples]
+  Owner: —  |  Updated: january 2025
+
+  [COMPLIANCE NOTES]
+    COMPLIANCE NOTES
+    - SWIFT messages must be archived for 7 years (regulatory requirement)
+    - archive location: SWIFT-ADAPTER writes to object storage (S3-compatible, 10.10.50.90)
+    - SWIFT_CERT_EXPIRY = 2025-09-30: the SWIFT connectivity cert expires september 2025.
+    renewal is lead time 12 weeks (SWIFT HSM hardware). must start by June 2025.
+    owner: payments team + network team + security team (joint)
+    - SWIFT CSP (Customer Security Programme) annual audit: scheduled october 2025
+
+  [swift and international payments - compliance and ops notes]
+    swift and international payments - compliance and ops notes
+    author: payments team lead
+    last updated: january 2025
+    for internal use - supplements formal SWIFT integration spec
+
+  [SWIFT MESSAGE TYPES WE USE]
+    SWIFT MESSAGE TYPES WE USE
+    - MT103: single customer credit transfer (most common, retail international payments)
+    - MT202: financial institution transfer (interbank, large value)
+    - MT940/942: account statements (reconciliation, end-of-day)
+
+  [The SWIFT-ADAPTER sits in the DMZ (10.10.100.0/24). It's the only component with]
+    The SWIFT-ADAPTER sits in the DMZ (10.10.100.0/24). It's the only component with direct
+    external network access (to the SWIFT network). All other components are internal.
+
+
+[2] Tech Budget Tracking 2025  [.XLSX]  [unstructured_samples]
+  Owner: —  |  Updated: april 2025
+
+  [Section 2]
+    o-renew clause - review by jan 2026
+    Oracle DB support | 84000 | 21000 | 21000 | 0% | CBS primary DB. upgrade to 21c under eval. renewal june 2026
+    Datadog APM | 42000 | 10500 | 10500 | 0% | renewal dec 2025. re-evaluate pricing for k8s migration
+    SWIFT membership | 120000 | 30000 | 30000 | 0% | non-negotiable. quarterly tranche
+    PagerDuty | 14400 | 3600 | 3600 | 0% | renewal nov 2025. 48 users. 12 havent been on-call in 90 days - audit
+    Confluent Control Center | 18000 | 4500 | 4500 | 0% |
+
+  [Section 1]
+    TECH BUDGET TRACKER 2025 - my own tracking, not official finance
+    last updated: april 2025
+    vendor/service | annual budget ($) | Q1 actual ($) | Q1 budget ($) | variance | notes
+    Snowflake DWH | 200000 | 52400 | 48500 | +8% | OVER - 3 big unoptimised BI queries. governance tightened.
+    IBM QRadar SIEM | 96000 | 24000 | 24000 | 0% | on track. renewal march 2026. auto-renew clause - review by jan 2026
+    Oracle DB support | 84000 | 21000 | 21000 | 0% | CBS primary D
+
+  [Section 3]
+    s. 12 havent been on-call in 90 days - audit
+    Confluent Control Center | 18000 | 4500 | 4500 | 0% | renewal dec 2025. evaluate vs open source alternatives
+    AWS (Route53/Glacier/CW) | 8400 | 2100 | 2100 | 0% | very limited cloud footprint. on-prem first policy
+    HashiCorp Vault | 0 | 0 | 0 | N/A | open source currently. enterprise ($24K/yr) if we scale beyond single node
+    open source stack (kafka, postgres, redis, airflow, keycloak, elk) | 0 | 0 | 0 | N/A | zero license cost - internal support
+
+
+[3] Security Team Notes  [.TXT]  [unstructured_samples]
+  Owner: —  |  Updated: march 2025
+
+  [CERTIFICATE MANAGEMENT]
+    CERTIFICATE MANAGEMENT
+    auth-svc TLS cert: wildcard *.company.internal, expires 2026-02-15
+    renew at 90 days before expiry - zabbix alert configured for 90-day warning
+    cert is managed by: security-ops team
+    payments-gw TLS cert: *.company.internal (same wildcard), expires 2026-02-15
+    swift adapter cert: separate cert, managed by network team + swift compliance
+    SWIFT_CERT_EXPIRY = 2025-09-30 - this one is sooner, watch it
+
+  [SECURITY ROADMAP (Q2/Q3 2025)]
+    SECURITY ROADMAP (Q2/Q3 2025)
+    - LDAP → LDAPS migration (port 389 → 636): Q3 2025
+    - TLS 1.2 minimum enforcement: Q2 2025
+    - Keycloak 23.x upgrade: Q3 2025
+    - SWIFT cert renewal (expires 2025-09-30): must complete by August 2025
+
+  [security notes - platform security team - internal]
+    security notes - platform security team - internal
+    compiled by: security ops lead
+    last updated: march 2025
+    classification: internal only - do not distribute outside platform teams
+
+  [KEYCLOAK REALMS]
+    KEYCLOAK REALMS
+    production realm: company-prod
+    test realm: company-test (not accessible from prod services)
+    all service accounts use client credentials flow (not password flow)
+    service account client IDs follow naming: svc-{servicename}-prod (e.g. svc-payments-gw-prod)
+
+
+[4] Data Governance and Compliance Framework  [.TXT]  [process_workflows]
+  Owner: Compliance and Risk Team  |  Updated: 2025-01-10
+
+  [DATA CLASSIFICATION]
+    PUBLIC: No restriction. Marketing materials, public rate sheets.
+    INTERNAL: Internal use only. Process docs, architecture diagrams. No external sharing.
+    CONFIDENTIAL: Customer accounts, transactions, financial reports. Encrypted. RBAC enforced.
+    RESTRICTED: Cardholder PAN, SWIFT keys, credentials, fraud model details.
+    - HSM-managed encryption keys. CISO approval for access. Immutable audit log.
+
+  [DATA RETENTION]
+    Transaction Records: 7 years (PCI-DSS + banking regulation)
+    Customer KYC Documents: 5 years after account closure (AML)
+    SWIFT Message Logs: 10 years
+    Authentication Logs: 7 years
+    Application Logs (non-compliance): 1 year
+    Fraud Model Training Data: 3 years
+
+  [REGULATORY FRAMEWORKS]
+    PCI-DSS (Payment Card Industry Data Security Standard)
+    Scope: CBS, PAYMENTS-GW, SWIFT-ADAPTER
+    Requirements:
+    - No storage of CVV/CVC data after authorisation
+    - Cardholder data encrypted at rest (AES-256) and in transit (TLS 1.2+)
+    - Access restricted to need-to-know (RBAC enforced)
+    - CBS_SESSION_TIMEOUT_SEC minimum 900 seconds (PCI-DSS Req 8.6)
+    Annual assessment: Qualified Security Assessor (QSA) audit in Q3
+    GDPR (General Data Protection Regulation)
+    Scope: All systems handling EU customer personal data
+    Requirements:
+    - Data minimisation
+    - Right to erasure: fulfilled within 30 days (submit ticket to Data Engineering)
+    - Data transfers outside EU require Standard Contractual Clauses (SCCs)
+    - Breach notification to regulators within 72 hours
+    DPO: dpo@company.com
+    Basel III / Central Bank Reporting
+    Scope: REPORTING-SVC, DWH
+    Requirements:
+    - Liquidity Coverage Ratio (LCR): daily (RPT-001 job)
+    - Net Stable Funding Ratio (NSFR): monthly
+    - Submit to regulator within 1 business day of generation
+
+  [GDPR ERASURE PROCESS]
+    1. Customer submits erasure request via portal or in writing.
+    2. DPO verifies identity and eligibility (no legal hold).
+    3. Data Engineering executes deletion across CBS, DWH, backups within 30 days.
+    4. Deletion confirmed in writing to customer.
+    Note: Records under regulatory retention cannot be deleted. Customer is notified.
+    CONTACTS:
+    DPO: dpo@company.com
+    Compliance Officer: compliance@company.com
+    PCI-DSS PM: pci-pm@company.com
+
+
+[5] Service Level Agreement Register and Actuals  [.TXT]  [sla_contracts]
+  Owner: Platform Engineering + Business Relationship Management  |  Updated: 2025-04-15
+
+  [SHEET 1 — SLA TARGETS BY APPLICATION]
+    | Application    | Availability Target | Max Planned Downtime/mo | Response Time SLO (p99) | Error Rate SLO | Support Window     |
+    |----------------|---------------------|--------------------------|--------------------------|----------------|--------------------|
+    | CBS            | 99.95%              | 21 min/month             | < 500ms                  | < 0.1%         | 24x7               |
+    | PAYMENTS-GW    | 99.95%              | 21 min/month             | < 2,000ms                | < 0.05%        | 24x7               |
+    | FRAUD-ENGINE   | 99.90%              | 43 min/month             | < 200ms                  | < 0.5%         | 24x7               |
+    | REPORTING-SVC  | 99.50%              | 3.6 hr/month             | < 10,000ms               | < 1.0%         | Business hours     |
+    | AUTH-SVC       | 99.99%              | 4 min/month              | < 100ms                  | < 0.01%        | 24x7               |
+    | SWIFT-ADAPTER  | 99.90%              | 43 min/month             | < 120,000ms (SWIFT dep.) | < 0.1%         | Business hours     |
+    | DATA-WAREHOUSE | 99.00%              | 7.2 hr/month             | N/A (batch)              | < 2.0%         | Business hours     |
+    | Kafka Cluster  | 99.95%              | 21 min/month             | < 50ms (produce/consume) | < 0.01%        | 24x7               |
+    NOTE: AUTH-SVC at 99.99% reflects its role as single point of authentication failure.
+    Any AUTH-SVC outage cascades to ALL other applications immediately.
+
+  [SHEET 3 — BREACH DETAIL LOG]
+    BREACH: INC-2024-1198
+    Date: 2024-12-14 02:17–04:35 (138 min total)
+    Affected: FRAUD-ENGINE (primary), PAYMENTS-GW (cascade), CBS (partial degradation)
+    Root Cause: Fraud Engine Redis ran Out of Memory (OOM). FRAUD_REDIS_TTL_SEC had been
+    reduced from 3600 to 300 by Risk Tech team without Platform Engineering sign-off.
+    This caused 12x recompute load, overwhelming Redis memory allocation.
+    Resolution: Redis flushed, FRAUD_REDIS_TTL_SEC restored to 3600, OOM alert threshold lowered.
+    SLA Impact: FRAUD-ENGINE breach (77.8 min vs 43 min target), PAYMENTS-GW breach (cascade).
+    Prevention: Change management process updated — parameter changes require CAB approval.
+    Redis OOM alert added to Zabbix (threshold: 80% memory).
+    Status: CLOSED. Post-incident review completed 2024-12-18.
+    BREACH: INC-2024-1201
+    Date: 2024-12-22 09:44–10:23 (39 min)
+    Affected: CBS (primary), PAYMENTS-GW (cascade)
+    Root Cause: CBS Oracle DB connection pool exhausted (CBS_DB_POOL_SIZE = 50).
+    December transaction volume spike (35% above normal) caused pool starvation.
+    New transactions queued, then timed out after 30 sec. CBS returned 503.
+    Resolution: CBS_DB_POOL_SIZE temporarily increased to 80 (DBA approved emergency change).
+    Permanent fix: pool size set to 100 with DBA sign-off. Connection monitoring added.
+    SLA Impact: CBS breach (39.3 min vs 21 min target). PAYMENTS-GW breach (cascade, 51.8 min).
+    Prevention: Capacity scaling plan initiated (see Capacity Register — PAYMENTS-GW priority).
+    Pool size auto-alert added at 80% utilisation.
+
+  [SHEET 4 — SLA PENALTY AND CREDIT SCHEDULE]
+    Internal SLA credits apply between Platform Engineering and business units.
+    | Availability Achieved | Credit to Business Unit          |
+    |-----------------------|----------------------------------|
+    | 99.90% – Target       | No credit                        |
+    | 99.50% – 99.90%       | 5% of monthly service charge     |
+    | 99.00% – 99.50%       | 10% of monthly service charge    |
+    | Below 99.00%          | 25% of monthly service charge    |
+    Credits applied in Q1 2025 (for Dec 2024 breaches):
+    CBS         : 5% credit — $2,400
+    PAYMENTS-GW : 5% credit — $1,800
+    FRAUD-ENGINE: 5% credit — $1,200
+    Total Q1 credits: $5,400
+
+  [SHEET 2 — SLA ACTUALS (Last 6 Months)]
+    CBS Availability:
+    Oct 2024: 99.97% (11.2 min downtime — planned maintenance)
+    Nov 2024: 99.98% (8.6 min downtime — planned maintenance)
+    Dec 2024: 99.91% (39.3 min downtime — INC-2024-1201: DB connection pool exhaustion) ⚠ BREACH
+    Jan 2025: 99.96% (17.4 min downtime — planned maintenance)
+    Feb 2025: 99.97% (12.8 min downtime — planned maintenance)
+    Mar 2025: 99.98% (8.6 min downtime — planned maintenance)
+    6-Month Average: 99.96% | Breaches: 1
+    PAYMENTS-GW Availability:
+    Oct 2024: 99.97% — OK
+    Nov 2024: 99.96% — OK
+    Dec 2024: 99.88% (51.8 min downtime — INC-2024-1201 cascade + INC-2024-1198) ⚠ BREACH
+    Jan 2025: 99.97% — OK
+    Feb 2025: 99.98% — OK
+    Mar 2025: 99.95% — OK
+    6-Month Average: 99.94% | Breaches: 1
+    FRAUD-ENGINE Availability:
+    Oct 2024: 99.95% — OK
+    Nov 2024: 99.93% — OK
+    Dec 2024: 99.82% (77.8 min — INC-2024-1198: Redis OOM, model scoring halted) ⚠ BREACH
+    Jan 2025: 99.94% — OK
+    Feb 2025: 99.96% — OK
+
+────────────────────────────────────────
+KEY METRICS AND DATA POINTS
+
+  • 3. PAYMENTS-GW calls FRAUD-ENGINE (10.10.1.30:8500) for risk score (synchronous, timeout 500ms)
+      [1] [swift_payments_ops_notes.txt]
+  • - Fraud score check must complete in < 500ms or payments GW times out and declines
+      [1] [swift_payments_ops_notes.txt]
+  • - CBS debit call must complete in < 2000ms
+      [1] [swift_payments_ops_notes.txt]
+  • - SWIFT messages must be archived for 7 years (regulatory requirement)
+      [1] [swift_payments_ops_notes.txt]
+  • occasional spikes from ~180ms to ~600ms. root cause: F5 BIG-IP TCP keepalive settings.
+      [1] [swift_payments_ops_notes.txt]
+  • - monthly SWIFT reconciliation: MT940 statement sometimes arrives 5-10 minutes after 23:00.
+      [1] [swift_payments_ops_notes.txt]
+  • - SWIFT cert expiry warning: security-ops@company.com + payments team (give 6 months warning)
+      [1] [swift_payments_ops_notes.txt]
+  • AWS (Route53/Glacier/CW) | 8400 | 2100 | 2100 | 0% | very limited cloud footprint. on-prem first policy
+      [2] [tech_budget_tracking_2025.xlsx]
+  • HashiCorp Vault | 0 | 0 | 0 | N/A | open source currently. enterprise ($24K/yr) if we scale beyond single node
+      [2] [tech_budget_tracking_2025.xlsx]
+  • TOTAL | 582800 | 148100 | 144200 | +2.7% | slightly over due to snowflake
+      [2] [tech_budget_tracking_2025.xlsx]
+  • RENEWALS WATCHLIST (next 12 months)
+      [2] [tech_budget_tracking_2025.xlsx]
+  • Confluent Control Center | dec 2025 | $18,000 | evaluate open source alternatives - potential $18K saving
+      [2] [tech_budget_tracking_2025.xlsx]
+  • Snowflake | june 2026 | ~$200,000 | negotiate volume discount - usage growing ~20%/yr
+      [2] [tech_budget_tracking_2025.xlsx]
+  • >50 failed logins in 5 minutes from single IP (brute force detection)
+      [3] [security_team_notes.txt]
+  • >1000 failed logins across all users in 15 minutes (credential stuffing detection)
+      [3] [security_team_notes.txt]
+  • renew at 90 days before expiry - zabbix alert configured for 90-day warning
+      [3] [security_team_notes.txt]
+  • session recording enabled - all prod SSH sessions are recorded and retained for 90 days
+      [3] [security_team_notes.txt]
+  • all service accounts rotate client secrets every 90 days (automated via vault)
+      [3] [security_team_notes.txt]
+  • - TLS 1.2 minimum enforcement: Q2 2025
+      [3] [security_team_notes.txt]
+  • - CBS_SESSION_TIMEOUT_SEC minimum 900 seconds (PCI-DSS Req 8.6)
+      [4] [data_governance_compliance.txt]
+
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+─
+PATTERNS, RISKS AND RECOMMENDATIONS
+
+  [1] [swift_payments_ops_notes.txt]
+    1. Customer initiates payment via online banking / API
+    2. Payments Gateway (10.10.1.20:9000) receives the payment request
+    3. PAYMENTS-GW calls FRAUD-ENGINE (10.10.1.30:8500) for risk score (synchronous, timeout 500ms)
+    4. If fraud score < 0.75 (FRAUD_SCORE_THRESHOLD): payment approved for processing
+    5. PAYMENTS-GW calls CBS (10.10.1.10:8080) to debit the source account
+
+  [1] [swift_payments_ops_notes.txt]
+    8. Confirmation message received asynchronously from SWIFT (usually within 1-2 hours for MT103)
+    
+    CRITICAL TIMINGS
+    - Fraud score check must complete in < 500ms or payments GW times out and declines
+    - CBS debit call must complete in < 2000ms
+
+  [1] [swift_payments_ops_notes.txt]
+    - SWIFT outage: payments-lead on PagerDuty + network-team immediately
+    a SWIFT outage = zero international payments processing = SEV-1 immediately
+    - SWIFT cert expiry warning: security-ops@company.com + payments team (give 6 months warning)
+
+  [2] [tech_budget_tracking_2025.xlsx]
+    AWS (Route53/Glacier/CW) | 8400 | 2100 | 2100 | 0% | very limited cloud footprint. on-prem first policy
+    HashiCorp Vault | 0 | 0 | 0 | N/A | open source currently. enterprise ($24K/yr) if we scale beyond single node
+    open source stack (kafka, postgres, redis, airflow, keycloak, elk) | 0 | 0 | 0 | N/A | zero license cost - internal support only
+    TOTAL | 582800 | 148100 | 144200 | +2.7% | slightly over due to snowflake
+
+  [2] [tech_budget_tracking_2025.xlsx]
+    AWS (Route53/Glacier/CW) | 8400 | 2100 | 2100 | 0% | very limited cloud footprint. on-prem first policy
+    HashiCorp Vault | 0 | 0 | 0 | N/A | open source currently. enterprise ($24K/yr) if we scale beyond single node
+    open source stack (kafka, postgres, redis, airflow, keycloak, elk) | 0 | 0 | 0 | N/A | zero license cost - internal support only
+    TOTAL | 582800 | 148100 | 144200 | +2.7% | slightly over due to snowflake
+    CAPEX REQUESTS PENDING
+
+  [2] [tech_budget_tracking_2025.xlsx]
+    RENEWALS WATCHLIST (next 12 months)
+    PagerDuty | nov 2025 | $14,400 | do user audit first - 12 inactive users
+    Confluent Control Center | dec 2025 | $18,000 | evaluate open source alternatives - potential $18K saving
+    Datadog | dec 2025 | $42,000 | re-price for kubernetes model
+    IBM QRadar | march 2026 | $96,000 | auto-renew clause - MUST review before jan 2026
+
+  [3] [security_team_notes.txt]
+    CERTIFICATE MANAGEMENT
+    auth-svc TLS cert: wildcard *.company.internal, expires 2026-02-15
+    renew at 90 days before expiry - zabbix alert configured for 90-day warning
+    cert is managed by: security-ops team
+    payments-gw TLS cert: *.company.internal (same wildcard), expires 2026-02-15
+
+  [3] [security_team_notes.txt]
+    RECENT SECURITY EVENTS
+    - december 2024: QRadar alert on unusual payment amounts from single account
+    investigated by risk tech: test account not correctly flagged as test. false positive.
+    account correctly flagged now. no fraud detected.
+    - february 2025: external pen test completed. no critical findings.
+
+  [3] [security_team_notes.txt]
+    investigated by risk tech: test account not correctly flagged as test. false positive.
+    account correctly flagged now. no fraud detected.
+    - february 2025: external pen test completed. no critical findings.
+    medium findings: LDAP plaintext (port 389) flagged - migration to LDAPS scheduled Q3 2025
+    low findings: some internal services not enforcing TLS 1.2+ minimum - remediation in progress
+
+  [4] [data_governance_compliance.txt]
+    PUBLIC: No restriction. Marketing materials, public rate sheets.
+    INTERNAL: Internal use only. Process docs, architecture diagrams. No external sharing.
+    CONFIDENTIAL: Customer accounts, transactions, financial reports. Encrypted. RBAC enforced.
+    RESTRICTED: Cardholder PAN, SWIFT keys, credentials, fraud model details.
+    - HSM-managed encryption keys. CISO approval for access. Immutable audit log.
+
+─────────────────────────────────────────────────────────────────
+CONFIDENCE: ✓ HIGH  ██████████  (100%)
+─────────────────────────────────────────────────────────────────
+  • Strong: 6 documents matched the query
+  • Strong relevance score (15.0)
+  • Top source clearly dominant — high specificity
+  • 2 of top sources are well-structured documents
+  • Exact query terms found in source (4 matches)
+
+─────────────────────────────────────────────────────────────────
+RELATED QUESTIONS
+─────────────────────────────────────────────────────────────────
+  1. What is the full SLA breach history for SWIFT-ADAPTER?
+  2. Which upcoming releases affect CBS?
+  3. What is the impact of changing SWIFT_CERT_EXPIRY and who needs to approve it?
+
+─────────────────────────────────────────────────────────────────
+REFERENCES  —  open source files for complete detail
+─────────────────────────────────────────────────────────────────
+[1] swift_payments_ops_notes.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Swift Payments Ops Notes
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated january 2025
+     Quality   : structured  |  BM25: 15.0  |  Relevance: 100%
+     Matched   : COMPLIANCE NOTES › swift and international payments - compliance and ops notes › SWIFT MESSAGE TYPES WE USE
+     Path      : knowledge_base\unstructured_samples\swift_payments_ops_notes.txt
+
+[2] tech_budget_tracking_2025.xlsx  (.XLSX)
+     ───────────────────────────────────────────────────────
+     Title     : Tech Budget Tracking 2025
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated april 2025
+     Quality   : partial  |  BM25: 11.3  |  Relevance: 90%
+     ℹ Note    : Partially structured — some metadata inferred from filename/folder
+     Path      : knowledge_base\unstructured_samples\tech_budget_tracking_2025.xlsx
+
+[3] security_team_notes.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Security Team Notes
+     Folder    : unstructured_samples
+     Owner     : —
+     Info      : Updated march 2025
+     Quality   : structured  |  BM25: 10.4  |  Relevance: 87%
+     Matched   : CERTIFICATE MANAGEMENT › SECURITY ROADMAP (Q2/Q3 2025) › security notes - platform security team - internal
+     Path      : knowledge_base\unstructured_samples\security_team_notes.txt
+
+[4] data_governance_compliance.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Data Governance and Compliance Framework
+     Folder    : process_workflows
+     Owner     : Compliance and Risk Team
+     Info      : v2.0 | Updated 2025-01-10
+     Quality   : structured  |  BM25: 8.8  |  Relevance: 82%
+     Matched   : DATA CLASSIFICATION › DATA RETENTION › REGULATORY FRAMEWORKS
+     Path      : knowledge_base\process_workflows\data_governance_compliance.txt
+
+[5] sla_register_and_actuals.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Service Level Agreement Register and Actuals
+     Folder    : sla_contracts
+     Owner     : Platform Engineering + Business Relationship Management
+     Info      : v3.2 | Updated 2025-04-15
+     Quality   : structured  |  BM25: 8.2  |  Relevance: 79%
+     Matched   : SHEET 1 — SLA TARGETS BY APPLICATION › SHEET 3 — BREACH DETAIL LOG › SHEET 4 — SLA PENALTY AND CREDIT SCHEDULE
+     Path      : knowledge_base\sla_contracts\sla_register_and_actuals.txt
+
+[6] release_change_register.txt  (.TXT)
+     ───────────────────────────────────────────────────────
+     Title     : Release Management and Change Register
+     Folder    : release_management
+     Owner     : Release Management Team
+     Info      : v4.0 | Updated 2025-04-20
+     Quality   : structured  |  BM25: 7.7  |  Relevance: 78%
+     Matched   : SHEET 5 — CAB PROCESS SUMMARY › SHEET 1 — RELEASE CALENDAR (2025) › SHEET 3 — RELEASE NOTES SUMMARY
+     Path      : knowledge_base\release_management\release_change_register.txt
