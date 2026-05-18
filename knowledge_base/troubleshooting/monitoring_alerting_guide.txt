@@ -1,0 +1,88 @@
+DOCUMENT: Monitoring and Alerting Infrastructure Guide
+TOPIC: Monitoring, Zabbix, Datadog, ELK, SIEM, Alerting
+VERSION: 3.0
+LAST UPDATED: 2025-03-15
+OWNER: Platform Engineering Team
+
+===========================
+MONITORING STACK
+===========================
+
+LAYER 1 — Infrastructure: Zabbix (10.10.50.20, port 8080)
+LAYER 2 — APM: Datadog (cloud-hosted, agent on all app servers)
+LAYER 3 — Log Aggregation: ELK Stack (Elasticsearch 10.10.50.50:9200, Kibana port 5601)
+LAYER 4 — Security: SIEM — IBM QRadar (10.10.50.100)
+LAYER 5 — Synthetic: AWS CloudWatch health checks every 60 seconds
+
+===========================
+ZABBIX
+===========================
+
+Server: 10.10.50.20
+Console: http://10.10.50.20:8080 (MGMT-NET only)
+Version: 6.4
+SNMP polling: 60 seconds
+Agents installed on all PROD-NET-01 and PROD-NET-02 servers.
+
+Alert thresholds:
+  CPU usage >85% for 5 minutes
+  Memory usage >90%
+  Disk usage >80%
+  Service down (systemd check)
+
+===========================
+DATADOG APM
+===========================
+
+SLOs:
+  CBS API: p99 latency < 500ms
+  PAYMENTS-GW: p99 latency < 2 seconds
+  FRAUD-ENGINE scoring: p99 latency < 200ms
+  AUTH-SVC token validation: p99 latency < 100ms
+
+Dashboards:
+  Core Banking Health — CBS and Payments overview
+  Security Overview — Auth failures, suspicious patterns
+  ETL Pipeline — Batch job status and durations
+
+Datadog alerts route to PagerDuty.
+
+===========================
+ELK STACK
+===========================
+
+Elasticsearch: 10.10.50.50:9200
+Kibana: http://10.10.50.50:5601 (MGMT-NET only)
+Log retention: Hot 7 days, Warm 30 days, Cold 1 year
+
+Useful Kibana queries:
+  Error spike: level:ERROR AND @timestamp:[now-1h TO now]
+  Payment failures: app:payments-gw AND message:*failed*
+  Auth failures: app:auth-svc AND message:*401*
+
+===========================
+SIEM — IBM QRadar
+===========================
+
+Host: 10.10.50.100
+Ingests: audit.events Kafka topic
+
+Offense rules:
+  Multiple failed logins same IP (>10 in 5 min)
+  Unusual payment amounts (>10x user average)
+  Privileged access outside business hours
+
+Security team reviews QRadar offenses daily. Sev 1 offenses trigger immediate PagerDuty.
+
+===========================
+ALERTING ROUTING
+===========================
+
+Infrastructure (Zabbix) → platform-eng@company.com
+APM SLO breaches (Datadog) → PagerDuty (severity by breach level)
+Security offenses (QRadar) → Email + PagerDuty (Sev 1)
+ETL failures (Airflow) → data-eng@company.com
+
+On-call rotation: Weekly, managed in PagerDuty.
+Teams: Platform Engineering, Data Engineering, Payments, Security.
+Escalation: No ack in 10 minutes → team lead.

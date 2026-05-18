@@ -1,0 +1,185 @@
+DOCUMENT: Operations Troubleshooting Runbook
+TOPIC: Troubleshooting, Incident Response, Common Errors
+VERSION: 6.2
+LAST UPDATED: 2025-05-17
+OWNER: Platform Engineering Team
+
+===========================
+ISSUE: Payments Gateway not processing — HTTP 503/504
+===========================
+
+STEPS:
+1. Check health: GET http://10.10.1.20:9000/payments/health (expected: status ok)
+2. SSH to 10.10.1.20 from MGMT-NET. Check: systemctl status payments-gw
+3. Check FRAUD-ENGINE: curl http://10.10.1.30:8500/fraud/score/health
+   PAYMENTS-GW calls FRAUD-ENGINE synchronously. If Fraud Engine is down, payments are blocked.
+4. Check CBS: curl http://10.10.1.10:8080/api/v2/health
+5. Review logs: /var/log/payments-gw/app.log — look for ConnectionRefused or Timeout errors.
+ESCALATE: If unresolved 15 minutes, page PAYMENTS-ONCALL (PagerDuty).
+
+===========================
+ISSUE: Users cannot log in — 401 errors — authentication failing — SSO down — login broken
+===========================
+
+SYMPTOMS:
+  - Users getting 401 Unauthorized errors across one or more applications
+  - "Invalid token" or "Token expired" errors in application logs
+  - Users reporting they cannot log in / login not working / unable to authenticate
+  - SSO (Single Sign-On / Keycloak / AUTH-SVC) appears unreachable
+  - All apps rejecting requests simultaneously (indicates AUTH-SVC is the root cause)
+
+FIRST CHECK — is this one user or all users?
+  All users affected    → AUTH-SVC is likely down. Follow steps below immediately.
+  Single user locked    → Check AUTH_MAX_LOGIN_ATTEMPTS in Keycloak admin (account lock after 5 failures).
+  Intermittent for many → Token expiry or refresh issue. Check AUTH_TOKEN_EXPIRY_SEC (default 900s).
+
+STEPS:
+1. Check AUTH-SVC health: curl https://10.10.1.50:8443/auth/health
+   Expected response: {"status": "UP"}
+   If DOWN: this is the root cause — all apps will return 401 until AUTH-SVC recovers.
+2. Check if PostgreSQL (Keycloak DB) is reachable from AUTH-SVC host:
+   psql -h localhost -U keycloak -c "\l"
+   If unreachable: auth database failure — page Security team immediately.
+3. Check AUTH_MAX_LOGIN_ATTEMPTS — if accounts are locked from bulk failures:
+   Log into Keycloak Admin Console at https://10.10.1.50:8443/auth/admin
+   Navigate to Users → find affected user → Sessions tab → check if locked.
+4. Check LDAP connectivity (AUTH-SVC federates to corporate LDAP):
+   ldapsearch -x -H ldap://10.10.50.10 -b "dc=company,dc=com"
+   If LDAP unreachable: corporate directory issue — escalate to Security + Network teams.
+5. Check token configuration — if tokens are expiring too fast:
+   AUTH_TOKEN_EXPIRY_SEC default: 900 (15 min)
+   AUTH_REFRESH_TOKEN_EXPIRY_SEC default: 86400 (24 hr)
+   If misconfigured, users will be forced to re-authenticate repeatedly.
+6. Review Keycloak logs for specific error: /var/log/keycloak/keycloak.log
+   Look for: "DB connection refused", "LDAP error", "realm not found", "client not found"
+7. Check Kibana for auth failure spike: app:auth-svc AND message:*401*
+   URL: http://10.10.50.50:5601 (from MGMT-NET)
+
+ESCALATE:
+  - security-ops@company.com for all AUTH-SVC issues
+  - Declare SEV-1 if >100 users affected or if AUTH-SVC is completely down
+  - All apps lose authentication capability when AUTH-SVC is down — treat as highest priority
+  - See INC-2024-0341 post-mortem: 47-min auth outage took down all user-facing apps
+
+===========================
+ISSUE: Users getting 403 Forbidden — access denied — permission denied — wrong role
+===========================
+
+SYMPTOMS:
+  - Specific user can log in but gets 403 on certain operations
+  - "Insufficient permissions" or "Access denied" errors
+  - User can access some apps but not others
+
+STEPS:
+1. Confirm user can authenticate (if 401 and 403 both, fix 401 first)
+2. Check user's role in Keycloak Admin Console → Users → [username] → Role Mappings
+3. Verify the correct role is assigned for the application they need:
+   analyst role       → REPORTING-SVC read, DWH read (restricted)
+   ops-user role      → Airflow monitor, Zabbix read, CBS read
+   payments-operator  → PAYMENTS-GW admin, CBS read
+   sysadmin role      → All systems (requires CISO approval, 90-day time limit)
+   risk-analyst role  → FRAUD-ENGINE config read, DWH full
+4. If role needs to be added: submit ServiceNow Access Request ticket (SLA: 2 business days)
+5. If urgent: Security team can provision same-day for production incidents
+ESCALATE: security-ops@company.com
+
+===========================
+ISSUE: ETL-001 job failed — DWH showing stale data
+===========================
+
+STEPS:
+1. Check Airflow at http://10.10.50.30:8081 — find dag_cbs_to_dwh, review task logs.
+2. Common cause 1: EOD-001 did not complete. Check if /data/exports/eod/YYYYMMDD_eod.csv exists.
+3. Common cause 2: Snowflake DWH unreachable. Test connectivity from ETL host.
+4. Common cause 3: Schema mismatch — CBS added column not mapped. Check logs for KeyError.
+5. Manual re-trigger: In Airflow UI, clear and re-run dag_cbs_to_dwh for the failed date.
+ESCALATE: Data Engineering on-call if retry fails (PagerDuty: DE-ONCALL).
+
+===========================
+ISSUE: Fraud Engine high false positives blocking legitimate payments
+===========================
+
+STEPS:
+1. Verify PAYMENTS-GW_FRAUD_THRESHOLD. Default 0.75. Lower value blocks more payments.
+2. Check FRAUD_MODEL_VERSION — if recently updated, model may need recalibration.
+3. Check FRAUD_REDIS_TTL_SEC — stale cached scores can cause issues.
+4. Flush Redis cache if stale scores suspected (coordinate with Risk Tech team first):
+   redis-cli -h 10.10.1.30 -p 6379 FLUSHDB
+5. Review logs: /var/log/fraud-engine/scoring.log
+ESCALATE: risktech@company.com
+
+===========================
+ISSUE: Reporting Service slow — timeout on report generation
+===========================
+
+STEPS:
+1. Check DWH query performance — review query plan in Snowflake console.
+2. Verify ETL-001 completed — stale DWH data causes report retries.
+3. Check resource usage: ssh 10.10.1.40, run top or htop.
+4. Check if CBS_BATCH_WINDOW_START overlaps with RPT-001 start time (I/O contention).
+ESCALATE: bi-ops@company.com
+
+===========================
+GENERAL CONTACTS
+===========================
+
+Platform Engineering: platform-eng@company.com | PagerDuty: PE-ONCALL
+Network Security: security-ops@company.com
+CBS Team: cbs-ops@company.com
+Data Engineering: data-eng@company.com | PagerDuty: DE-ONCALL
+Payments Team: PagerDuty: PAYMENTS-ONCALL
+Risk Technology: risktech@company.com
+BI Team: bi-ops@company.com
+
+===========================
+ISSUE: Kafka consumer lag high — Fraud Engine falling behind
+===========================
+
+SYMPTOMS:
+  - Fraud scoring latency increasing
+  - Consumer lag on fraud.transaction.events > 10,000 messages
+  - PAYMENTS-GW waiting for fraud scores (transaction latency spike)
+
+STEPS:
+1. Check consumer lag: kafka-consumer-groups.sh --bootstrap-server 10.10.1.70:9092 --describe --group fraud-engine-cg-prod
+   High lag (>10,000): Fraud Engine is falling behind.
+2. Check Fraud Engine CPU: ssh 10.10.1.30, run top. If CPU near 100% during retraining (FRAUD-RETRAIN-001), lag will recover after job completes.
+3. Check FRAUD_REDIS_TTL_SEC — if recently reduced, recompute load may be overwhelming the engine.
+4. Check Confluent Control Center: http://10.10.50.40:9021 (MGMT-NET only)
+5. Do NOT change FRAUD_KAFKA_CONSUMER_GROUP — this resets offset and causes reprocessing of millions of events.
+ESCALATE: risktech@company.com + platform-eng@company.com
+
+===========================
+ISSUE: Kafka broker down / under-replicated partitions
+===========================
+
+STEPS:
+1. Check which broker is down: kafka-broker-api-versions.sh --bootstrap-server 10.10.1.70:9092
+2. SSH to affected broker (10.10.1.70, 71, or 72): systemctl status kafka
+3. Check disk space — INC-2024-0234 and INC-2025-0044 were both caused by log segment accumulation:
+   df -h /kafka/data
+   If disk >80%: kafka-log-dirs.sh to identify large topics, then run log compaction.
+4. With replication factor 3 and min.ISR=2, cluster stays operational with 1 broker down.
+   Do NOT restart all brokers simultaneously.
+5. Check Zabbix alert for under-replicated partitions.
+ESCALATE: platform-eng@company.com
+
+===========================
+ISSUE: CBS returning 503 — core banking unavailable — mainframe down
+===========================
+
+SYMPTOMS:
+  - HTTP 503 from CBS API at http://10.10.1.10:8080/api/v2
+  - Payments failing because CBS is unavailable
+  - "Core banking unreachable" errors in PAYMENTS-GW logs
+
+STEPS:
+1. Check CBS health: curl http://10.10.1.10:8080/api/v2/health
+2. SSH to 10.10.1.10 from MGMT-NET: systemctl status cbs
+3. Check Oracle DB connection pool — CBS_DB_POOL_SIZE default is 100 (was 50 before INC-2024-1201).
+   If pool exhausted: DBA team can increase temporarily. Alert at 80% pool utilisation should have fired.
+4. Check Oracle DB: sqlplus / as sysdba (from CBS host). Look for lock contention or tablespace full.
+5. Check CBS_BATCH_WINDOW_START — if during batch window (23:00-01:00), CBS may be under high load.
+   Do not restart CBS during batch window without CBS Team approval.
+6. Review logs: /var/log/cbs/app.log
+ESCALATE: cbs-ops@company.com immediately. SEV-1 — CBS down affects all payment processing.
