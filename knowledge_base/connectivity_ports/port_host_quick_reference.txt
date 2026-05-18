@@ -1,0 +1,117 @@
+DOCUMENT: Application Port and Host Quick Reference
+TOPIC: Port Numbers, Hosts, IP Addresses, Endpoints, Quick Reference, Lookup
+VERSION: 1.0
+LAST UPDATED: 2025-05-01
+OWNER: Platform Engineering Team
+
+===========================
+PURPOSE
+===========================
+
+This is the single authoritative quick-reference for all application hosts, ports,
+and API endpoints. Use this when you need to quickly find where something lives.
+For firewall rules and full network detail, see port_registry.txt.
+For full application dependencies, see application_connectivity_map.txt.
+
+===========================
+APPLICATION HOST AND PORT REFERENCE
+===========================
+
+CBS / Core Banking System / Core Banking / Mainframe / Banking System / Core App:
+  Host: 10.10.1.10
+  Port: 8080 (HTTP)
+  API:  http://10.10.1.10:8080/api/v2
+  DB:   Oracle 19c on 10.10.2.10, port 1521
+  Tech: Java 17
+
+PAYMENTS-GW / Payments Gateway / Payment Gateway / Payment Processor / PG:
+  Host: 10.10.1.20
+  Port: 9000 (HTTP)
+  API:  http://10.10.1.20:9000/payments
+  DB:   PostgreSQL 15 on 10.10.2.12, port 5432
+  Tech: Python 3.11
+
+FRAUD-ENGINE / Fraud Engine / Fraud Detection / Scoring Engine / Risk Engine / ML Scoring:
+  Host: 10.10.1.30
+  Port: 8500 (HTTP)
+  API:  http://10.10.1.30:8500/fraud/score
+  Cache: Redis on 10.10.2.13, port 6379
+  Tech: Python 3.11
+
+REPORTING-SVC / Reporting Service / Report Generator / BI Service:
+  Host: 10.10.1.40
+  Port: 8200 (HTTP)
+  API:  http://10.10.1.40:8200/reports
+  DB:   PostgreSQL 15 on 10.10.2.12, port 5432
+  Tech: Python 3.10
+
+AUTH-SVC / Authentication Service / Keycloak / SSO / Single Sign-On / Identity Provider / Login Service:
+  Host: 10.10.1.50
+  Port: 8443 (HTTPS)
+  API:  https://10.10.1.50:8443/auth
+  Admin Console: https://10.10.1.50:8443/auth/admin
+  DB:   PostgreSQL 15 on 10.10.2.11, port 5432
+  Tech: Keycloak 22
+
+SWIFT-ADAPTER / SWIFT Integration / Swift Connector / International Payments Adapter:
+  Host: 10.10.1.60
+  Internal Port: 8090 (used by PAYMENTS-GW to call SWIFT-ADAPTER)
+  External SWIFT Connection: 192.168.200.5 port 3000 (dedicated leased line, NOT internet)
+  Tech: Java 11
+
+KAFKA / Kafka Broker / Kafka Cluster / Event Streaming / Message Broker / Message Queue:
+  Broker 1: 10.10.1.70, port 9092 (plaintext internal), port 9093 (SSL cross-zone)
+  Broker 2: 10.10.1.71
+  Broker 3: 10.10.1.72
+  Zookeeper: 10.10.1.71, port 2181 (internal only)
+  Tech: Apache Kafka 3.5.1
+
+DATA-WAREHOUSE / DWH / Snowflake / Analytical Store / Analytics Database:
+  Platform: Snowflake (cloud, in-region)
+  Fed by: ETL pipeline (Airflow dag_cbs_to_dwh), updated nightly at 23:30
+  Note: T+1 data only — previous day's data available from 01:00 daily
+
+===========================
+MANAGEMENT AND MONITORING HOSTS
+===========================
+
+Airflow / Orchestration / Scheduler / ETL Dashboard:
+  URL: http://10.10.50.30:8081 (MGMT-NET only)
+
+Zabbix / Infrastructure Monitoring / Network Monitoring:
+  Host: 10.10.50.20
+  URL:  http://10.10.50.20:8080 (MGMT-NET only)
+  Port: 8080 (console), 161 UDP (SNMP polling)
+
+Kibana / Log Aggregation / ELK / Log Management:
+  URL: http://10.10.50.50:5601 (MGMT-NET only)
+  Elasticsearch: 10.10.50.50:9200
+
+Confluent Control Center / Kafka Monitoring:
+  URL: http://10.10.50.40:9021 (MGMT-NET only)
+
+QRadar / SIEM / Security Monitoring:
+  Host: 10.10.50.100
+
+API Registry (all OpenAPI specs):
+  URL: http://10.10.50.60:8090/api-registry (MGMT-NET only)
+
+===========================
+NETWORK SEGMENTS
+===========================
+
+PROD-NET-01 (Application servers): 10.10.1.0/24, VLAN 101, Gateway 10.10.1.1
+PROD-NET-02 (Database servers):    10.10.2.0/24, VLAN 102, Gateway 10.10.2.1
+MGMT-NET (Management):             10.10.50.0/24, VLAN 150, Gateway 10.10.50.1
+DMZ-NET (External-facing):         172.16.1.0/24, VLAN 200, Gateway 172.16.1.1
+
+SSH access: FROM MGMT-NET only (port 22). RDP blocked. Telnet blocked.
+Customer portal: 443 (HTTPS) in DMZ-NET only.
+
+===========================
+CRITICAL RULE
+===========================
+
+If you need to open a new port: submit CAB request in ServiceNow (type: Network Change).
+Required: business justification, source/dest IPs, port, protocol.
+Approval: Network Security Lead + Application Owner. SLA: 5 business days.

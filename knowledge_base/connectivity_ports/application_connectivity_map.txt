@@ -1,0 +1,72 @@
+DOCUMENT: Application Connectivity and Integration Map
+TOPIC: Application Connectivity, Dependencies
+VERSION: 2.7
+LAST UPDATED: 2025-01-15
+OWNER: Architecture Team
+
+===========================
+CORE APPLICATIONS
+===========================
+
+APP: CORE-BANKING-SYS (CBS)
+  Host: 10.10.1.10
+  Port: 8080
+  Description: Primary core banking platform. Source of truth for all account data.
+  Tech Stack: Java 17, Oracle DB 19c
+  Depends On: PAYMENTS-GW, REPORTING-SVC, AUTH-SVC
+  API: http://10.10.1.10:8080/api/v2
+
+APP: PAYMENTS-GATEWAY (PAYMENTS-GW)
+  Host: 10.10.1.20
+  Port: 9000
+  Description: Handles all inbound and outbound payment processing.
+  Tech Stack: Python 3.11, PostgreSQL 15
+  Depends On: CBS, FRAUD-ENGINE, SWIFT-ADAPTER
+  API: http://10.10.1.20:9000/payments
+
+APP: FRAUD-ENGINE
+  Host: 10.10.1.30
+  Port: 8500
+  Description: Real-time fraud detection and scoring engine.
+  Tech Stack: Python 3.11, Redis, Kafka
+  Depends On: CBS (read-only), KAFKA-BROKER
+  API: http://10.10.1.30:8500/fraud/score
+
+APP: REPORTING-SVC
+  Host: 10.10.1.40
+  Port: 8200
+  Description: Regulatory and management report generation. Pulls from CBS and DWH.
+  Tech Stack: Python 3.10, PostgreSQL 15
+  Depends On: CBS, DATA-WAREHOUSE, AUTH-SVC
+  API: http://10.10.1.40:8200/reports
+
+APP: AUTH-SVC (Authentication Service)
+  Host: 10.10.1.50
+  Port: 8443
+  Description: Central authentication and authorisation via Keycloak. All apps validate tokens here.
+  Tech Stack: Keycloak 22, PostgreSQL 15
+  Depends On: LDAP-SERVER (10.10.50.10)
+  API: https://10.10.1.50:8443/auth
+
+APP: SWIFT-ADAPTER
+  Host: 10.10.1.60
+  Port: 8090 (internal), 3000 (SWIFT Alliance Gateway)
+  Description: Interface to SWIFT network for international transfers.
+  Tech Stack: Java 11, Oracle DB
+  Depends On: PAYMENTS-GW
+  External: SWIFT Alliance Gateway at 192.168.200.5:3000
+
+APP: DATA-WAREHOUSE (DWH)
+  Host: 10.10.2.10
+  Description: Central analytical store. Updated nightly via ETL.
+  Tech Stack: Snowflake (hybrid), Python ETL via Airflow
+  Depends On: CBS (ETL source)
+
+===========================
+DEPENDENCY CHAIN
+===========================
+
+Client → AUTH-SVC → CBS → PAYMENTS-GW → FRAUD-ENGINE
+                                       → SWIFT-ADAPTER (international only)
+
+Nightly: CBS → ETL (Airflow dag_cbs_to_dwh) → DATA-WAREHOUSE → REPORTING-SVC

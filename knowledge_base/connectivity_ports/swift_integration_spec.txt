@@ -1,0 +1,64 @@
+DOCUMENT: SWIFT Integration Technical Specification
+TOPIC: SWIFT, International Payments, Adapter
+VERSION: 3.0
+LAST UPDATED: 2024-10-05
+OWNER: Payments Team
+
+===========================
+OVERVIEW
+===========================
+
+Integration between enterprise Payments Gateway and SWIFT network via SWIFT-ADAPTER.
+All international wire transfers (SEPA, RTGS) are routed through this integration.
+
+===========================
+SWIFT ADAPTER CONFIGURATION
+===========================
+
+Host: 10.10.1.60
+Internal Port: 8090 (used by PAYMENTS-GW)
+External SWIFT Connection: 192.168.200.5 port 3000 (dedicated leased line, not internet)
+
+PARAM: SWIFT_BIC_CODE = BNPAFRPPXXX
+  Bank Identifier Code. Must match SWIFT registration.
+
+PARAM: SWIFT_MSG_FORMAT = MT103 (customer transfers), MT202 (bank-to-bank)
+  Standard SWIFT message types for international wire transfers.
+
+PARAM: SWIFT_TIMEOUT_SEC = 120
+  Timeout for SWIFT acknowledgment. SWIFT typically responds within 30-90 seconds.
+
+PARAM: SWIFT_MAX_TRANSFER_LIMIT_USD = 5000000.0
+  Maximum single transfer. Above this requires manual compliance approval.
+
+===========================
+MESSAGE FLOW
+===========================
+
+1. Customer initiates international transfer via CBS.
+2. CBS sends instruction to PAYMENTS-GW (port 9000).
+3. PAYMENTS-GW validates and runs fraud check via FRAUD-ENGINE (port 8500).
+4. If approved, PAYMENTS-GW calls SWIFT-ADAPTER (port 8090).
+5. SWIFT-ADAPTER constructs MT103/MT202 and sends to SWIFT Alliance Gateway (192.168.200.5:3000).
+6. SWIFT Gateway returns ACK/NAK.
+7. SWIFT-ADAPTER returns status to PAYMENTS-GW, which updates CBS.
+
+===========================
+FAILURE HANDLING
+===========================
+
+If SWIFT unreachable (timeout or NAK):
+  - PAYMENTS-GW marks transaction as pending-swift
+  - Retry every 10 minutes for up to 4 hours
+  - After 4 hours: transaction failed, customer alerted
+  - Alert sent to payments-swift-ops@company.com
+
+===========================
+COMPLIANCE
+===========================
+
+All SWIFT messages logged to /data/swift/audit/ (encrypted, retained 10 years).
+Sanctioned country/entity checks run by PAYMENTS-GW compliance filter before SWIFT-ADAPTER.
+
+CONTACT: payments-swift-ops@company.com
+SWIFT Service Desk: +32 2 655 3111

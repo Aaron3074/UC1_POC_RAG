@@ -1,0 +1,93 @@
+DOCUMENT: Enterprise Port and Protocol Registry
+TOPIC: Port Numbers, Firewall Rules, Protocols
+VERSION: 4.1
+LAST UPDATED: 2025-02-20
+OWNER: Network Security Team
+
+===========================
+APPROVED PORTS
+===========================
+
+PORT 8080 — TCP/HTTP
+  Application: Core Banking System (CBS) REST API
+  Host: 10.10.1.10
+  Direction: Internal only (PROD-NET-01)
+  Firewall Rule: FW-RULE-0042
+
+PORT 9000 — TCP/HTTP
+  Application: Payments Gateway API
+  Host: 10.10.1.20
+  Direction: Internal only (PROD-NET-01)
+  Firewall Rule: FW-RULE-0050
+
+PORT 8500 — TCP/HTTP
+  Application: Fraud Engine Scoring API
+  Host: 10.10.1.30
+  Direction: Internal only (PROD-NET-01)
+  Firewall Rule: FW-RULE-0055
+
+PORT 8200 — TCP/HTTP
+  Application: Reporting Service API
+  Host: 10.10.1.40
+  Direction: Internal only (PROD-NET-01)
+  Firewall Rule: FW-RULE-0060
+
+PORT 8443 — TCP/HTTPS
+  Application: Authentication Service (Keycloak)
+  Host: 10.10.1.50
+  Direction: Internal + DMZ. All apps must be able to reach this.
+  Firewall Rule: FW-RULE-0010
+
+PORT 443 — TCP/HTTPS
+  Application: External-facing Customer Portal
+  Direction: DMZ inbound from Internet
+  Firewall Rule: FW-RULE-0001
+
+PORT 5432 — TCP
+  Application: PostgreSQL Database
+  Direction: Internal only (PROD-NET-02). Only PROD-NET-01 app servers allowed.
+  Firewall Rule: FW-RULE-0100
+
+PORT 1521 — TCP
+  Application: Oracle Database
+  Direction: Internal only (PROD-NET-02). CBS and SWIFT-ADAPTER only.
+  Firewall Rule: FW-RULE-0101
+
+PORT 9092 — TCP
+  Application: Apache Kafka Broker
+  Host: 10.10.1.70
+  Direction: Internal only. Fraud Engine is primary consumer.
+  Firewall Rule: FW-RULE-0070
+
+PORT 6379 — TCP
+  Application: Redis Cache (Fraud Engine)
+  Direction: Internal only, restricted to FRAUD-ENGINE host (10.10.1.30)
+  Firewall Rule: FW-RULE-0075
+
+PORT 22 — TCP/SSH
+  Application: Secure Shell management
+  Direction: FROM MGMT-NET only. No direct access from PROD or DMZ.
+  Firewall Rule: FW-RULE-0200
+
+PORT 161 — UDP/SNMP
+  Application: Network monitoring (Zabbix)
+  Direction: FROM 10.10.50.20 (Zabbix server) only
+  Firewall Rule: FW-RULE-0210
+
+===========================
+BLOCKED PORTS
+===========================
+
+Port 23 (Telnet) — Blocked. Insecure.
+Port 21 (FTP) — Blocked. Use SFTP on port 22.
+Port 80 (HTTP) — Redirected to 443. Direct access blocked.
+Port 3389 (RDP) — Blocked. Use jump server via SSH.
+
+===========================
+REQUESTING A NEW PORT
+===========================
+
+Submit CAB request via ServiceNow portal (ticket type: Network Change).
+Required fields: business justification, source/dest IPs, port, protocol, duration.
+Approval: Network Security Lead + Application Owner.
+SLA: 5 business days.
