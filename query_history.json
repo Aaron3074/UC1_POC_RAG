@@ -1,0 +1,128 @@
+[
+  {
+    "query": "Walk me through the ETL job failure troubleshooting steps and what causes it",
+    "intent": "SUMMARY",
+    "confidence": "HIGH",
+    "timestamp": "2026-05-18T11:37:26.667763",
+    "status": "SUCCESS",
+    "top_source": "operations_runbook.txt",
+    "output_file": "outputs\\20260518_113726_summary_high_walk_me_through_the_etl_job_failure_troubleshootin.txt"
+  },
+  {
+    "query": "Which system is closest to a capacity breach?",
+    "intent": "ANALYTICAL",
+    "confidence": "HIGH",
+    "timestamp": "2026-05-18T11:37:42.948933",
+    "status": "SUCCESS",
+    "top_source": "sla_register_and_actuals.txt",
+    "output_file": "outputs\\20260518_113742_analytical_high_which_system_is_closest_to_a_capacity_breach.txt"
+  },
+  {
+    "query": "What are all the risks I should know about before approving the fraud engine v3.4.0 release?",
+    "intent": "LIST",
+    "confidence": "HIGH",
+    "timestamp": "2026-05-18T11:37:55.631995",
+    "status": "SUCCESS",
+    "top_source": "oncall_handover_notes_may2025.txt",
+    "output_file": "outputs\\20260518_113755_list_high_what_are_all_the_risks_i_should_know_about_before.txt"
+  },
+  {
+    "query": "What should I watch out for this weekend as the on-call engineer?",
+    "intent": "SUMMARY",
+    "confidence": "HIGH",
+    "timestamp": "2026-05-18T11:38:01.013425",
+    "status": "SUCCESS",
+    "top_source": "escalation_contacts_adhoc.xlsx",
+    "output_file": "outputs\\20260518_113801_summary_high_what_should_i_watch_out_for_this_weekend_as_the_on.txt"
+  },
+  {
+    "query": "Users are getting 401 errors and cannot log in",
+    "intent": "TROUBLESHOOT",
+    "confidence": "HIGH",
+    "timestamp": "2026-05-18T11:38:25.334117",
+    "status": "SUCCESS",
+    "top_source": "operations_runbook.txt",
+    "output_file": "outputs\\20260518_113825_troubleshoot_high_users_are_getting_401_errors_and_cannot_log_in.txt"
+  },
+  {
+    "query": "What port does the mainframe use?",
+    "intent": "LOOKUP",
+    "confidence": "HIGH",
+    "timestamp": "2026-05-18T11:38:44.315774",
+    "status": "SUCCESS",
+    "top_source": "swift_integration_spec.txt",
+    "output_file": "outputs\\20260518_113844_lookup_high_what_port_does_the_mainframe_use.txt"
+  },
+  {
+    "query": "CBS is returning 503, what do I do?",
+    "intent": "SUMMARY",
+    "confidence": "HIGH",
+    "timestamp": "2026-05-18T11:38:53.580970",
+    "status": "SUCCESS",
+    "top_source": "slack_incident_thread_dec2024.txt",
+    "output_file": "outputs\\20260518_113853_summary_high_cbs_is_returning_503_what_do_i_do.txt"
+  },
+  {
+    "query": "What is the CBS database pool size and why was it changed?",
+    "intent": "SUMMARY",
+    "confidence": "HIGH",
+    "timestamp": "2026-05-18T11:38:59.159837",
+    "status": "SUCCESS",
+    "top_source": "email_thread_engineering_decisions.txt",
+    "output_file": "outputs\\20260518_113859_summary_high_what_is_the_cbs_database_pool_size_and_why_was_it.txt"
+  },
+  {
+    "query": "What constraints exist on FRAUD_REDIS_TTL_SEC and who needs to approve changes?",
+    "intent": "SUMMARY",
+    "confidence": "HIGH",
+    "timestamp": "2026-05-18T11:39:12.481323",
+    "status": "SUCCESS",
+    "top_source": "oncall_handover_notes_may2025.txt",
+    "output_file": "outputs\\20260518_113912_summary_high_what_constraints_exist_on_fraud_redis_ttl_sec_and.txt"
+  },
+  {
+    "query": "What VLANs are used in the production network and what are their IP ranges?",
+    "intent": "SUMMARY",
+    "confidence": "HIGH",
+    "timestamp": "2026-05-18T11:39:18.804617",
+    "status": "SUCCESS",
+    "top_source": "core_network_overview.txt",
+    "output_file": "outputs\\20260518_113918_summary_high_what_vlans_are_used_in_the_production_network_and.txt"
+  },
+  {
+    "query": "When does the SWIFT certificate expire and what is the renewal lead time?",
+    "intent": "ANALYTICAL",
+    "confidence": "HIGH",
+    "timestamp": "2026-05-18T11:39:22.392206",
+    "status": "SUCCESS",
+    "top_source": "swift_payments_ops_notes.txt",
+    "output_file": "outputs\\20260518_113922_analytical_high_when_does_the_swift_certificate_expire_and_what_is.txt"
+  },
+  {
+    "query": "What are the top risks identified for Q2 2025?",
+    "intent": "SUMMARY",
+    "confidence": "HIGH",
+    "timestamp": "2026-05-18T11:39:37.836474",
+    "status": "SUCCESS",
+    "top_source": "operations_runbook.txt",
+    "output_file": "outputs\\20260518_113937_summary_high_what_are_the_top_risks_identified_for_q2_2025.txt"
+  },
+  {
+    "query": "I am a new analyst. What is the difference between CBS and the Payments Gateway?",
+    "intent": "COMPARISON",
+    "confidence": "HIGH",
+    "timestamp": "2026-05-18T11:39:41.046974",
+    "status": "SUCCESS",
+    "top_source": "new_analyst_faq.txt",
+    "output_file": "outputs\\20260518_113941_comparison_high_i_am_a_new_analyst_what_is_the_difference_between.txt"
+  },
+  {
+    "query": "your question here",
+    "intent": "SUMMARY",
+    "confidence": "HIGH",
+    "timestamp": "2026-05-18T11:39:56.543264",
+    "status": "SUCCESS",
+    "top_source": "parameter_notes_from_call.txt",
+    "output_file": "outputs\\20260518_113956_summary_high_your_question_here.txt"
+  }
+]
