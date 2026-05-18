@@ -1,0 +1,328 @@
+# ============================================================
+# ENTERPRISE KNOWLEDGE ASSISTANT — SYNONYM REGISTRY
+# ============================================================
+# Each entry: canonical_name: followed by aliases with '  - '
+# The engine expands both queries AND indexed documents.
+# A query for "mainframe" will match docs that say "CBS" and vice versa.
+#
+# ADD ENTRIES:
+#   my_term:
+#     - alias one
+#     - alias two
+# ============================================================
+
+# ── APPLICATIONS ─────────────────────────────────────────────
+
+cbs:
+  - core banking system
+  - core banking
+  - mainframe
+  - banking system
+  - account system
+  - the core system
+  - cbs application
+  - core app
+
+payments-gw:
+  - payments gateway
+  - payment gateway
+  - payments gw
+  - pg
+  - payment processor
+  - payments service
+  - payment service
+  - payment processing system
+
+fraud-engine:
+  - fraud engine
+  - fraud detection
+  - fraud scoring
+  - fraud service
+  - fraud system
+  - scoring engine
+  - risk engine
+  - ml scoring
+  - fraud checker
+
+auth-svc:
+  - authentication service
+  - auth service
+  - keycloak
+  - sso
+  - single sign on
+  - identity provider
+  - idp
+  - login service
+  - auth server
+  - user authentication
+  - iam service
+  - access management
+
+reporting-svc:
+  - reporting service
+  - reports service
+  - reporting
+  - report generator
+  - bi service
+  - business intelligence service
+
+swift-adapter:
+  - swift adapter
+  - swift integration
+  - swift connector
+  - swift interface
+  - international payments adapter
+  - swift module
+
+data-warehouse:
+  - dwh
+  - data warehouse
+  - snowflake
+  - analytical store
+  - analytics database
+  - analytics db
+  - reporting database
+  - warehouse
+
+kafka:
+  - kafka broker
+  - kafka cluster
+  - event streaming
+  - message broker
+  - message queue
+  - event bus
+  - apache kafka
+  - streaming platform
+
+etl:
+  - etl pipeline
+  - etl job
+  - etl-001
+  - dag_cbs_to_dwh
+  - data pipeline
+  - airflow pipeline
+  - nightly etl
+  - batch pipeline
+  - ingestion job
+
+airflow:
+  - apache airflow
+  - orchestration
+  - scheduler
+  - workflow orchestrator
+  - dag
+
+zabbix:
+  - zabbix server
+  - infrastructure monitoring
+  - network monitoring
+  - snmp monitoring
+  - system monitoring
+
+elk:
+  - elk stack
+  - elasticsearch
+  - kibana
+  - log aggregation
+  - log management
+  - logging platform
+
+qradar:
+  - ibm qradar
+  - siem
+  - security information and event management
+  - security monitoring
+  - threat detection
+
+datadog:
+  - datadog apm
+  - apm
+  - application performance monitoring
+  - performance monitoring
+  - tracing
+
+# ── INFRASTRUCTURE ────────────────────────────────────────────
+
+prod-net-01:
+  - production network
+  - app server network
+  - 10.10.1.0
+  - application tier network
+
+prod-net-02:
+  - database network
+  - db network
+  - 10.10.2.0
+  - database tier network
+
+mgmt-net:
+  - management network
+  - 10.10.50.0
+  - admin network
+  - operations network
+
+dc-west:
+  - primary datacenter
+  - primary data centre
+  - primary site
+  - main datacenter
+
+dc-east:
+  - dr site
+  - disaster recovery site
+  - failover site
+  - secondary datacenter
+
+# ── PROCESSES AND CONCEPTS ────────────────────────────────────
+
+sla:
+  - service level agreement
+  - service level
+  - availability target
+  - uptime target
+  - uptime agreement
+
+rto:
+  - recovery time objective
+  - recovery time
+  - maximum downtime
+
+rpo:
+  - recovery point objective
+  - maximum data loss
+  - data loss tolerance
+
+cab:
+  - change advisory board
+  - change board
+  - change management
+  - change approval
+  - change committee
+
+pci-dss:
+  - pci dss
+  - pci compliance
+  - payment card industry
+  - payment card security
+
+gdpr:
+  - general data protection regulation
+  - data protection
+  - data privacy
+  - privacy regulation
+
+sev-1:
+  - severity 1
+  - critical incident
+  - p1
+  - priority 1
+  - major incident
+
+sev-2:
+  - severity 2
+  - high severity
+  - p2
+  - priority 2
+
+sev-3:
+  - severity 3
+  - medium severity
+  - p3
+  - minor incident
+
+post-mortem:
+  - postmortem
+  - rca
+  - root cause analysis
+  - incident review
+  - post incident review
+  - blameless review
+
+tps:
+  - transactions per second
+  - throughput
+  - transaction rate
+  - transaction volume
+
+redis:
+  - redis cache
+  - cache
+  - in-memory cache
+  - fraud cache
+  - fraud_redis_ttl_sec
+
+jwt:
+  - json web token
+  - access token
+  - bearer token
+  - auth token
+  - token
+
+mfa:
+  - multi factor authentication
+  - two factor authentication
+  - 2fa
+  - multi-factor
+
+rbac:
+  - role based access control
+  - roles
+  - permissions
+  - access control
+  - role management
+
+vault:
+  - hashicorp vault
+  - secrets management
+  - secrets manager
+  - secrets store
+  - credential management
+
+kubernetes:
+  - k8s
+  - container orchestration
+  - containers
+  - containerisation
+  - containerization
+
+# ── TEAMS AND ROLES ───────────────────────────────────────────
+
+platform-engineering:
+  - platform team
+  - infra team
+  - infrastructure team
+  - pe team
+  - devops
+
+data-engineering:
+  - data team
+  - de team
+  - etl team
+  - data eng
+
+risk-technology:
+  - risk tech
+  - risk team
+  - fraud team
+  - model team
+
+payments-team:
+  - payments
+  - payment team
+  - swift team
+
+security-team:
+  - security
+  - infosec
+  - cybersecurity
+  - sec team
+
+dpo:
+  - data protection officer
+  - privacy officer
+  - gdpr officer
+
+ciso:
+  - chief information security officer
+  - security lead
+  - security officer

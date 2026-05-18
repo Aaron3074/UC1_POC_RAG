@@ -1,0 +1,981 @@
+# AUTO-DISCOVERED SYNONYMS
+# Generated: 2026-05-18 11:37
+# Review these and promote useful ones to synonym_registry.yaml
+# Lines starting with # are comments.
+
+2025 quarterly business review:
+  - 2025
+  - business
+  - quarterly
+  - review
+access:
+  - sysadmin
+access control:
+  - iam
+access control iam policy:
+  - access
+  - control
+  - policy
+ack:
+  - swift
+active:
+  - hot storage
+adr-006:
+  - proposed
+adr-007:
+  - proposed
+adr-008:
+  - kraft migration
+  - proposed
+aes-256:
+  - cardholder data encrypted at rest
+all user facing applications unavailable:
+  - sev-2
+alliance gateway:
+  - swift
+aml:
+  - anti money laundering
+analyst faq:
+  - analyst
+analyst question:
+  - analyst
+  - question
+anti money laundering:
+  - aml
+api:
+  - cbs
+  - jwt
+  - rest
+  - swift
+api integration standards:
+  - integration
+  - standards
+app-net:
+  - db-net
+  - mgmt-net
+application:
+  - sheet
+application connectivity map:
+  - application
+  - connectivity
+application owner:
+  - network security lead
+application servers:
+  - prod-net-01
+architecture decision records:
+  - architecture
+  - decision
+  - records
+architecture sync feb2025:
+  - architecture
+  - feb2025
+  - sync
+architecture team:
+  - decider
+  - status
+archive:
+  - cold storage
+  - stage
+  - warm storage
+as referenced in operations runbook:
+  - etl-001
+audience:
+  - engineering leads
+auth:
+  - service
+auth-svc:
+  - authentication service
+  - cbs
+  - closed
+  - december freeze
+  - depends on
+  - fraud-engine
+authentication service:
+  - auth-svc
+aws:
+  - cloud
+  - dns
+  - sqs
+bank identifier code:
+  - bic
+bank to bank:
+  - mt202
+banking:
+  - cbs
+  - core
+batch etl workflow:
+  - batch
+  - workflow
+bic:
+  - bank identifier code
+  - swift
+  - swift partner id
+big-ip:
+  - swift
+breach:
+  - inc-2024-1198
+  - inc-2024-1201
+brute force detection:
+  - ip
+bsd:
+  - open source
+bsl:
+  - open source
+cab:
+  - change advisory board
+  - risk tech
+capacity:
+  - sheet
+cardholder data encrypted at rest:
+  - aes-256
+cbs:
+  - api
+  - auth-svc
+  - banking
+  - closed
+  - core
+  - core banking
+central firewall cluster:
+  - cfc
+cfc:
+  - central firewall cluster
+change:
+  - high urgency
+  - low risk
+  - medium risk
+change advisory board:
+  - cab
+change register:
+  - release management
+closed:
+  - auth-svc
+  - cbs
+  - dwh
+  - etl
+  - fraud-engine
+  - inc-2024-0341
+cloud:
+  - aws
+cold storage:
+  - archive
+compliance:
+  - theme
+contributing:
+  - factors
+core:
+  - banking
+  - cbs
+core banking:
+  - cbs
+core banking sys:
+  - cbs
+core banking system:
+  - cbs
+core network overview:
+  - core
+  - network
+  - overview
+corp-net:
+  - ldap
+  - mgmt-net
+cpu:
+  - gpu
+  - ram
+  - tps
+  - warning
+create:
+  - dba
+  - index
+cross zone:
+  - tls
+csp:
+  - customer security programme
+cto:
+  - date
+  - decider
+  - status
+customer:
+  - impact
+customer security programme:
+  - csp
+customer transfers:
+  - mt103
+data eng:
+  - platform eng
+data eng etl dwh:
+  - data
+data engineering:
+  - de-oncall
+data governance compliance:
+  - compliance
+  - data
+  - governance
+data retention:
+  - purge policy
+data retention policy:
+  - data
+  - policy
+  - retention
+data warehouse:
+  - dwh
+data-warehouse:
+  - reporting-svc
+database servers:
+  - prod-net-02
+date:
+  - cto
+  - decider
+  - status
+db-net:
+  - app-net
+  - mgmt-net
+dba:
+  - cbs
+  - create
+  - index
+dba runbook:
+  - runbook
+dc-east:
+  - dc-west
+dc-west:
+  - dc-east
+de-oncall:
+  - data engineering
+  - etl
+december freeze:
+  - auth-svc
+decider:
+  - architecture team
+  - cto
+  - date
+  - status
+decisions:
+  - pending arb
+demilitarized zone:
+  - dmz
+depends on:
+  - auth-svc
+  - payments-gw
+detail:
+  - sheet
+developer:
+  - experience
+  - milestone
+  - theme
+developer guide:
+  - integration standards
+disaster recovery plan:
+  - disaster
+  - plan
+  - recovery
+disk:
+  - gb
+  - this one bites people
+dmz:
+  - demilitarized zone
+dmz-net:
+  - external facing
+dns:
+  - aws
+  - internal
+done:
+  - cbs
+  - etl
+  - risk tech
+dpo:
+  - gdpr
+dwh:
+  - cbs
+  - closed
+  - data warehouse
+  - etl
+  - etl-001
+  - full
+email thread engineering decisions:
+  - decisions
+  - email
+  - engineering
+  - thread
+engine:
+  - fraud
+engineer onboarding:
+  - engineer
+  - onboarding
+engineering leads:
+  - audience
+escalation:
+  - who to call
+escalation contacts adhoc:
+  - adhoc
+  - contacts
+  - escalation
+etl:
+  - cbs
+  - closed
+  - de-oncall
+  - done
+  - dwh
+  - sev-2
+etl source:
+  - cbs
+etl-001:
+  - as referenced in operations runbook
+  - dwh
+experience:
+  - developer
+  - milestone
+  - theme
+external facing:
+  - dmz-net
+factors:
+  - contributing
+flows:
+  - step by step for new people
+fraud:
+  - engine
+fraud engine:
+  - fraud-engine
+  - issue
+  - payments-gw
+fraud engine nan scores:
+  - inc-2025-0203
+fraud engine redis ran out of memory:
+  - oom
+fraud model deployment:
+  - deployment
+  - fraud
+  - model
+fraud-engine:
+  - auth-svc
+  - closed
+  - fraud engine
+  - inc-2024-1198
+  - inc-2025-0203
+  - payments gw calls fraud engine
+frozen codebases:
+  - swift-adapter
+ftp:
+  - http
+  - rdp
+full:
+  - dwh
+gateway:
+  - payments
+gdpr:
+  - dpo
+  - general data protection regulation
+  - pci-dss
+general data protection regulation:
+  - gdpr
+gpu:
+  - cpu
+high urgency:
+  - change
+horizontal pod autoscaler:
+  - hpa
+horizontal scale:
+  - tps
+host:
+  - port
+hot storage:
+  - active
+hpa:
+  - horizontal pod autoscaler
+http:
+  - ftp
+  - rdp
+iam:
+  - access control
+ibm:
+  - siem
+iii:
+  - lcr
+impact:
+  - customer
+improving:
+  - post redis fix
+  - schema validation added
+inc-2024-0234:
+  - inc-2025-0044
+  - sev-3
+inc-2024-0341:
+  - auth-svc
+  - closed
+  - sev-2
+inc-2024-0892:
+  - closed
+  - reporting-svc
+  - sev-2
+inc-2024-1198:
+  - breach
+  - closed
+  - fraud-engine
+  - payments-gw
+  - sev-1
+inc-2024-1201:
+  - breach
+  - closed
+  - payments-gw
+  - sev-1
+  - what went well december incident
+inc-2025-0044:
+  - closed
+  - inc-2024-0234
+  - kafka-broker-2
+  - sev-3
+inc-2025-0112:
+  - auth-svc
+  - sev-3
+inc-2025-0203:
+  - fraud engine nan scores
+  - fraud-engine
+  - sev-2
+inc-2025-0288:
+  - reporting-svc
+  - sev-3
+incident:
+  - sheet
+incident postmortem 2024:
+  - 2024
+  - incident
+  - postmortem
+incident tracker 2024 2025:
+  - 2024
+  - 2025
+  - incident
+  - tracker
+index:
+  - create
+  - dba
+integration standards:
+  - developer guide
+internal:
+  - dns
+internal only:
+  - prod-net-01
+  - prod-net-02
+internal port:
+  - payments-gw
+international only:
+  - swift-adapter
+iso:
+  - swift
+issue:
+  - fraud engine
+issues:
+  - known
+java:
+  - cbs
+jwt:
+  - api
+  - auth-svc
+kafka knowledge transfer:
+  - kafka
+  - knowledge
+  - transfer
+kafka messaging:
+  - kafka
+  - messaging
+kafka-broker-2:
+  - closed
+  - inc-2025-0044
+  - sev-3
+keycloak:
+  - service
+keycloak account:
+  - auth-svc
+known:
+  - issues
+kraft migration:
+  - adr-008
+last:
+  - updated
+lcr:
+  - iii
+  - liquidity coverage ratio
+ldap:
+  - auth-svc
+  - corp-net
+  - ldaps
+ldaps:
+  - ldap
+liquidity coverage ratio:
+  - lcr
+log:
+  - sheet
+low risk:
+  - change
+management:
+  - mgmt-net
+medium risk:
+  - change
+mfa:
+  - totp via keycloak
+mgmt-net:
+  - app-net
+  - corp-net
+  - db-net
+  - management
+  - ssh
+  - url
+milestone:
+  - developer
+  - experience
+  - resilience
+  - scale
+  - theme
+milestones:
+  - slide
+monitoring alerting:
+  - alerting
+  - monitoring
+mos:
+  - my oracle support
+mt103:
+  - customer transfers
+  - mt202
+  - swift
+  - swift-adapter
+mt202:
+  - bank to bank
+  - mt103
+my oracle support:
+  - mos
+nak:
+  - swift
+nan fraud scores:
+  - rel-2025-009
+net stable funding ratio:
+  - nsfr
+net-2025-018:
+  - tcp keepalive latency spikes
+network security lead:
+  - application owner
+network team working:
+  - network
+  - team
+  - working
+new resource created:
+  - post
+nginx:
+  - payments gw instance behind load balancer
+notes:
+  - secondary site at dr datacenter
+nsfr:
+  - net stable funding ratio
+october:
+  - q4
+oncall handover may2025:
+  - handover
+  - may2025
+  - oncall
+oom:
+  - cbs
+  - closed
+  - fraud engine redis ran out of memory
+  - param change
+  - parameter change
+  - sev-1
+open source:
+  - bsd
+  - bsl
+  - pgdg
+  - platform eng
+  - security team
+operations runbook:
+  - operations
+  - runbook
+oracle:
+  - cbs
+oracle data guard:
+  - cbs
+over:
+  - dwh
+owner:
+  - risk team
+param:
+  - payments-
+param change:
+  - oom
+parameter call:
+  - call
+  - parameter
+parameter change:
+  - oom
+parameter reference:
+  - parameter
+  - reference
+partial degradation:
+  - cbs
+payments:
+  - gateway
+payments gateway:
+  - payments-gw
+payments gw calls fraud engine:
+  - fraud-engine
+payments gw instance behind load balancer:
+  - nginx
+payments team:
+  - payments-gw
+  - payments-oncall
+  - success
+  - swift
+payments-:
+  - param
+  - risk tech
+payments-gw:
+  - auth-svc
+  - closed
+  - depends on
+  - fraud engine
+  - fraud-engine
+  - inc-2024-1198
+payments-oncall:
+  - payments team
+pci-dss:
+  - gdpr
+pending arb:
+  - decisions
+pgdg:
+  - open source
+pii:
+  - requires dpo approval
+pipeline:
+  - upcoming releases
+platform change:
+  - change
+  - platform
+platform eng:
+  - data eng
+  - open source
+platform eng retro:
+  - platform
+  - retro
+platform engineering:
+  - risk tech
+platform technology roadmap:
+  - platform
+  - roadmap
+  - technology
+port:
+  - host
+port host quick reference:
+  - host
+  - port
+  - quick
+  - reference
+port numbers:
+  - topic
+port registry:
+  - port
+  - registry
+post:
+  - new resource created
+post incident review inc2025 0203:
+  - 0203
+  - inc2025
+  - incident
+  - post
+  - review
+post redis fix:
+  - improving
+primary:
+  - cbs
+prod-net-01:
+  - application servers
+  - internal only
+prod-net-02:
+  - database servers
+  - internal only
+project status email may2025:
+  - email
+  - may2025
+  - project
+  - status
+proposed:
+  - adr-006
+  - adr-007
+  - adr-008
+purge policy:
+  - data retention
+qsa:
+  - qualified security assessor
+qualified security assessor:
+  - qsa
+quick reference card:
+  - card
+  - quick
+  - reference
+ram:
+  - cpu
+  - gb
+rdp:
+  - ftp
+  - http
+read:
+  - cbs
+read only:
+  - cbs
+recovery point objective:
+  - rpo
+recovery time objective:
+  - rto
+rel-2025-002:
+  - payments-gw
+rel-2025-009:
+  - fraud-engine
+  - nan fraud scores
+  - rollback
+rel-2025-011:
+  - auth-svc
+rel-2025-012:
+  - swift-adapter
+release:
+  - sheet
+release change:
+  - change
+  - release
+release management:
+  - change register
+releases:
+  - upcoming
+reporting service:
+  - reporting-svc
+reporting-svc:
+  - auth-svc
+  - closed
+  - data-warehouse
+  - fraud-engine
+  - inc-2024-0892
+  - inc-2025-0288
+requires dpo approval:
+  - pii
+resilience:
+  - milestone
+  - theme
+rest:
+  - api
+risk team:
+  - owner
+risk tech:
+  - cab
+  - done
+  - fraud-engine
+  - payments-
+  - platform engineering
+  - success
+rollback:
+  - fraud-engine
+  - rel-2025-009
+rpo:
+  - recovery point objective
+  - rto
+  - tier
+rto:
+  - recovery time objective
+  - rpo
+  - tier
+scale:
+  - milestone
+  - theme
+schema validation added:
+  - improving
+secondary site at dr datacenter:
+  - notes
+security team:
+  - auth-svc
+  - open source
+  - security
+  - success
+  - team
+service:
+  - auth
+  - keycloak
+service desk:
+  - swift
+service mesh poc:
+  - q3
+sev-1:
+  - cbs
+  - closed
+  - fraud-engine
+  - inc-2024-1198
+  - inc-2024-1201
+  - oom
+sev-2:
+  - all user facing applications unavailable
+  - auth-svc
+  - closed
+  - dwh
+  - etl
+  - fraud-engine
+sev-3:
+  - auth-svc
+  - closed
+  - inc-2024-0234
+  - inc-2025-0044
+  - inc-2025-0112
+  - inc-2025-0288
+severity:
+  - sev-1
+  - sev-2
+sheet:
+  - application
+  - capacity
+  - detail
+  - incident
+  - log
+  - release
+siem:
+  - ibm
+single sign-on:
+  - auth-svc
+size:
+  - gb
+sla:
+  - cbs
+  - sheet
+sla actuals:
+  - actuals
+sla tracking personal spreadsheet:
+  - personal
+  - spreadsheet
+  - tracking
+slack incident thread dec2024:
+  - dec2024
+  - incident
+  - slack
+  - thread
+slide:
+  - milestones
+snmp polling:
+  - udp
+snowflake:
+  - dwh
+snowflake external saas:
+  - warehouse
+sqs:
+  - aws
+ssh:
+  - mgmt-net
+sso:
+  - auth-svc
+stage:
+  - archive
+status:
+  - architecture team
+  - cto
+  - date
+  - decider
+step by step for new people:
+  - flows
+success:
+  - auth-svc
+  - cbs
+  - fraud-engine
+  - payments team
+  - payments-gw
+  - risk tech
+summary:
+  - sheet
+swift:
+  - ack
+  - alliance gateway
+  - api
+  - bic
+  - big-ip
+  - iso
+swift integration:
+  - integration
+  - swift
+swift partner id:
+  - bic
+swift payments ops:
+  - payments
+  - swift
+swift-adapter:
+  - frozen codebases
+  - international only
+  - mt103
+  - payments-gw
+  - rel-2025-012
+  - swift
+sysadmin:
+  - access
+system capacity:
+  - capacity
+  - system
+tcp keepalive latency spikes:
+  - net-2025-018
+team leads briefing may2025:
+  - briefing
+  - leads
+  - may2025
+  - team
+tech budget tracking 2025:
+  - 2025
+  - budget
+  - tech
+  - tracking
+theme:
+  - compliance
+  - developer
+  - experience
+  - milestone
+  - resilience
+  - scale
+this one bites people:
+  - disk
+tier:
+  - rpo
+  - rto
+tls:
+  - cross zone
+topic:
+  - port numbers
+total downtime:
+  - sev-1
+totp via keycloak:
+  - mfa
+tps:
+  - cbs
+  - cpu
+  - horizontal scale
+  - without lb
+transaction status updates:
+  - cbs
+trends:
+  - sheet
+udp:
+  - snmp polling
+upcoming:
+  - releases
+upcoming releases:
+  - pipeline
+updated:
+  - last
+url:
+  - mgmt-net
+vendor licensing:
+  - licensing
+  - vendor
+vlan:
+  - mgmt-net
+warehouse:
+  - snowflake external saas
+warm storage:
+  - archive
+warning:
+  - cpu
+what went well december incident:
+  - inc-2024-1201
+who to call:
+  - escalation
+without lb:
+  - tps
+yes:
+  - cbs
+  - closed
+  - sev-1
+ytd:
+  - q1
