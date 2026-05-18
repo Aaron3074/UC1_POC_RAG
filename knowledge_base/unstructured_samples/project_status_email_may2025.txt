@@ -1,0 +1,66 @@
+--- EMAIL - SAVED FOR REFERENCE - sent to eng leads may 5 2025 ---
+
+FROM: platform lead
+TO: engineering leads distribution
+SUBJECT: quick platform status update - q2 so far
+
+hey all,
+
+quick status on the main initiatives. keeping it short.
+
+PAYMENTS GW HORIZONTAL SCALE (priority 1 - urgent):
+status: 65% done
+what's done: load balancer config, NGINX setup, test environment working
+blocker: session state refactor. payments GW stores session state in memory right now.
+         we need to move this to a shared redis store before we can put LB in front.
+         if we put LB in front without fixing session state, users get inconsistent 
+         experience (request goes to instance A, session is on instance B = error)
+timeline: was may 15, now looking more like may 22-25 depending on redis refactor.
+          this is P1. payments GW peak CPU was 88%, TPS ceiling is 500, we're already 
+          at 412 peak. december will be worse. we cannot miss this.
+owner: payments team + platform
+
+FRAUD ENGINE REDIS AUTO-SCALING (priority 2):
+status: 40% done  
+what's done: redis sentinel config, basic failover testing
+what's left: load testing under realistic fraud.transaction.events volume
+             need to simulate FRAUD_REDIS_TTL_SEC at 3600 under peak load
+timeline: end of may 2025
+note: FRAUD_REDIS_TTL_SEC stays at 3600 until this is done. risk tech knows.
+      after INC-2024-1198 (the 138 min redis OOM in december) we are not touching that param.
+owner: risk tech + platform
+
+AUTH-SVC TOKEN CACHING (priority 3):
+status: design done, implementation 20%
+what: apps cache JWT tokens locally for 5 min grace period when auth-svc is unreachable
+      prevents the cascade we saw in INC-2024-0341 (47 min auth outage = everything down)
+timeline: Q2, part of auth-svc v1.6.0 in june
+owner: security team
+
+VAULT SECRETS INTEGRATION (priority 4):
+status: not started yet
+what: migrate secrets from env vars and config files to hashicorp vault
+      root cause of INC-2024-0341 was manual config file edit with wrong password
+      vault eliminates this risk
+timeline: auth-svc first (june with v1.6.0), other services Q3
+owner: security team
+
+CONTAINERISATION (priority 5):
+status: DELAYED
+what: dockerise payments-gw, fraud-engine, reporting-svc, auth-svc
+      deploy to kubernetes (on-prem cluster)
+problem: k8s cluster hardware procurement is 3 weeks delayed
+          was Q3, now probably Q4 for first services
+note: CBS and SWIFT-ADAPTER excluded (vendor sign-off needed, separate track)
+owner: platform
+
+SWIFT ISO 20022 ACTIVATION:
+infrastructure ready since REL-2025-012 (april 2025)
+swift mandate: all FIs must support MX format by end 2025
+testing slot booked for september 2025 (6-8 week testing cycle with SWIFT)
+must initiate by october or we risk missing the mandate
+action needed: payments team to confirm SWIFT testing readiness by august
+
+thanks all. happy to discuss any of these in the engineering sync thursday.
+
+platform lead

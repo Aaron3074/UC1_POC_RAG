@@ -1,0 +1,63 @@
+network team working notes - shared with platform eng
+author: network team (netsec lead)
+last updated: february 2025
+NOTE: these are working notes, not the official network architecture doc
+
+VLAN LAYOUT (as of Q4 2024)
+VLAN 10 - APP-NET:      10.10.1.0/24   (application servers, all prod services)
+VLAN 20 - DB-NET:       10.10.2.0/24   (databases only, no direct internet)
+VLAN 30 - MGMT-NET:     10.10.50.0/24  (management, monitoring, bastion hosts)
+VLAN 40 - DMZ:          10.10.100.0/24 (external-facing only, nothing internal touches this directly)
+VLAN 50 - CORP-NET:     192.168.1.0/24 (corporate office, not prod - for LDAP federation only)
+
+FIREWALL RULES (key ones - full rules are in Palo Alto management console)
+  APP-NET → DB-NET:   allowed on specific ports only (postgres 5432, redis 6379)
+  MGMT-NET → APP-NET: allowed all (for SSH, monitoring)
+  MGMT-NET → DB-NET:  allowed all (for DBA access)
+  DMZ → APP-NET:      NOT allowed (DMZ is isolated)
+  CORP-NET → APP-NET: NOT allowed (LDAP traffic goes CORP-NET → MGMT-NET → AUTH-SVC only)
+  all outbound to internet from APP-NET: blocked except approved egress list
+    approved egress: Snowflake (company-prod.snowflakecomputing.com), SWIFT network endpoint
+    all other outbound: blocked by default
+
+DNS (internal)
+  primary: 10.10.50.5:53  (bind9, MGMT-NET)
+  secondary: 10.10.50.6:53
+  all internal hostnames resolve within company.internal domain
+  CBS internal hostname: cbs.company.internal (resolves to 10.10.1.10)
+  PAYMENTS-GW hostname: payments-gw.company.internal (resolves to 10.10.1.20)
+  FRAUD-ENGINE hostname: fraud-engine.company.internal (resolves to 10.10.1.30)
+  AUTH-SVC hostname: auth-svc.company.internal (resolves to 10.10.1.50)
+  KAFKA cluster: kafka.company.internal (round-robin: 10.10.1.70, 10.10.1.71, 10.10.1.72)
+  DWH proxy: dwh.company.internal → proxied to Snowflake via MGMT-NET proxy
+
+LOAD BALANCERS
+  external LB: F5 BIG-IP (DMZ, 10.10.100.10) - handles SWIFT inbound + partner API
+  internal LB: HAProxy on 10.10.50.20 (MGMT-NET) - internal service discovery
+  NOTE: PAYMENTS-GW does NOT currently sit behind the internal LB - session state refactor
+    is in progress for v2.9.0. LB cannot be enabled until stateless session refactor is done.
+
+MONITORING NETWORK SEGMENTS
+  Zabbix server: 10.10.50.30 (MGMT-NET) - polls all APP-NET and DB-NET hosts via SNMP + agent
+  Datadog agent: installed on each app server, beacons to Datadog cloud (approved egress)
+  QRadar SIEM: 10.10.50.40 (MGMT-NET) - collects syslog from all network devices + app servers
+  ELK stack: 10.10.50.50 (Kibana UI port 5601, ElasticSearch port 9200, MGMT-NET only)
+    Kibana URL: http://10.10.50.50:5601 (accessible from MGMT-NET only, not from corporate)
+
+KNOWN ISSUES (as of feb 2025)
+  1. kafka broker-2 (10.10.1.71) had a NIC flap in december 2024 that contributed to INC-2024-1201
+     monitoring was updated to alert on NIC errors. no recurrence since.
+  2. SWIFT adapter outbound traffic goes through F5 BIG-IP. latency spikes have been observed
+     during high volume periods. root cause: TCP keepalive settings on the F5.
+     fix scheduled for Q2 2025 (network team backlog item NET-2025-018)
+  3. LDAP federation: AUTH-SVC talks to corporate LDAP at 10.10.50.10.
+     this is the only connection between CORP-NET and the prod environment (via MGMT-NET routing).
+     LDAP port 389 (plain). migration to LDAPS (636) is in the security roadmap for Q3 2025.
+
+DR NETWORK NOTES (secondary site at DR datacenter)
+  DR site replicates APP-NET and DB-NET at 10.20.0.0/16
+  CBS DR replica: 10.20.1.10
+  RTO target: 4 hours for full platform switch to DR
+  RPO target: 15 minutes (synchronous CBS DB replication, async everything else)
+  last DR test: october 2024. CBS failover took 3hr 42min (within RTO).
+  next DR test: scheduled october 2025.

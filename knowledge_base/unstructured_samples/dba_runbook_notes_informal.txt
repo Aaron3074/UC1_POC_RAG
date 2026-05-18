@@ -1,0 +1,66 @@
+dba notes - things i wish i knew when i joined - compiled by james (dba team lead)
+not official. not reviewed. just stuff that saves you at 2am.
+
+last updated: march 2025
+
+CBS DATABASE (PostgreSQL 14.2 on 10.10.1.11 port 5432)
+- CBS_DB_POOL_SIZE = 100 (was 50 before december 2024 incident INC-2024-1201)
+  the december incident was caused by pool exhaustion at peak december volume
+  quick math that platform_lead did in the slack thread: 500 TPS * 0.6s avg hold = 300 concurrent connections
+  we only had 50 slots. never again. now it's 100.
+- zabbix alert fires at 80% pool utilisation (= 80 connections). that's the warning threshold.
+  if you get that alert and it's not december just check for a runaway query first.
+- CBS postgres is on dedicated SSD RAID-10. do NOT run ad-hoc heavy queries on prod.
+  use the read replica at 10.10.1.12:5432 for reporting. the replica has a 30-60 sec lag.
+
+KEYCLOAK / AUTH DATABASE (PostgreSQL 14.2 on localhost of auth host 10.10.1.50)
+- auth db is on the same host as keycloak. keep an eye on disk usage.
+  /var/lib/postgresql/14/main - runs out of space if keycloak audit logs aren't rotated.
+  log rotation script is /opt/scripts/rotate_keycloak_logs.sh - runs nightly via cron.
+- if auth-svc starts throwing DB connection errors and pool isn't exhausted, check disk first.
+  auth db disk alert set at 80% in zabbix. threshold: /dev/sda1 > 80%.
+
+DATA WAREHOUSE (Snowflake - external SaaS)
+- Snowflake account: company-prod.snowflakecomputing.com
+- DWH_SNOWFLAKE_WAREHOUSE = COMPUTE_WH (medium, 2 clusters)
+- Q1 2025 was 8% over Snowflake compute budget. data eng put query cost alerts in.
+- ad-hoc queries over 1TB in the console = flag to data eng lead (dataeng@company.com)
+- the fact_transactions table had a missing index after CBS v4.2.0 release (INC-2025-0288)
+  new column beneficiary_account_type was added but the index on it wasn't migrated.
+  DBA added: CREATE INDEX idx_fact_tx_ben_acct ON fact_transactions(beneficiary_account_type);
+  lesson: always check for missing indexes after a CBS release that touches transaction schema.
+
+PAYMENTS GATEWAY DB (PostgreSQL 14.2 on 10.10.1.21 port 5432)
+- connection pool managed by PgBouncer on 10.10.1.21:6432
+- PG_BOUNCER_POOL_SIZE = 40 for payments db
+- payments db stores transaction state. session state refactor is in progress for v2.9.0 LB work.
+- if payments GW is throwing 503 and CBS is fine, check pgbouncer logs:
+  /var/log/pgbouncer/pgbouncer.log
+
+REDIS CACHES
+- Fraud engine Redis: 10.10.1.31 port 6379 (Sentinel managed)
+  FRAUD_REDIS_TTL_SEC = 3600 (do NOT change without platform eng co-approval)
+  sentinel config done, auto-scaling load test scheduled for may 2025
+- Auth session Redis: 10.10.1.51 port 6379
+  AUTH_TOKEN_EXPIRY_SEC = 900 (15 min session tokens)
+  AUTH_REFRESH_TOKEN_EXPIRY_SEC = 86400 (24 hr refresh tokens)
+  if users are getting logged out too fast, check this value first.
+
+KAFKA BROKER DISK (this one bites people)
+- broker-2 is on 10.10.1.71. has historically been the disk usage problem child.
+- INC-2025-0044 (january 2025) was kafka broker-2 disk full causing consumer lag on fraud.transaction.events
+- if broker-2 disk hits 80% zabbix fires. fix: restart log compaction.
+  kafka-log-dirs.sh --bootstrap-server 10.10.1.70:9092 --topic-list fraud.transaction.events
+- longer term fix: increase KAFKA_LOG_RETENTION_HOURS from default or move to tiered storage (on roadmap)
+
+GENERAL DBA STUFF
+- all production DB changes require DBA approval + CAB ticket
+- emergency pool size changes can be approved by DBA team lead + platform lead (as happened in INC-2024-1201)
+- read replicas exist for CBS and DWH (snowflake). use them for analytics.
+- connection string format: postgresql://user:pass@host:port/dbname?sslmode=require
+- all prod DBs require SSL. PGSSLMODE=require in application env.
+
+CONTACTS
+- DBA team: dba-team@company.com
+- DBA on-call: dba-oncall PagerDuty rotation
+- platform lead escalation: platform-eng@company.com

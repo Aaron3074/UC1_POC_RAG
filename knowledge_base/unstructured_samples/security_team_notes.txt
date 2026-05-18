@@ -1,0 +1,58 @@
+security notes - platform security team - internal
+compiled by: security ops lead
+last updated: march 2025
+classification: internal only - do not distribute outside platform teams
+
+AUTH-SVC / KEYCLOAK SECURITY NOTES
+- keycloak version: 22.0.5 (current), upgrade to 23.x scheduled Q3 2025
+- AUTH_MAX_LOGIN_ATTEMPTS = 5 (account locks after 5 failed logins)
+  this is the most common cause of "user can't log in" tickets from the help desk
+  to unlock: keycloak admin console → Users → find user → Sessions → Clear Sessions + unlock
+  URL: https://10.10.1.50:8443/auth/admin (requires admin credentials, request via IT helpdesk)
+- auth logs are fed to QRadar via syslog. QRadar rules alert on:
+  >50 failed logins in 5 minutes from single IP (brute force detection)
+  >1000 failed logins across all users in 15 minutes (credential stuffing detection)
+  alert destination: security-ops@company.com + PagerDuty security rotation
+
+KEYCLOAK REALMS
+  production realm: company-prod
+  test realm: company-test (not accessible from prod services)
+  all service accounts use client credentials flow (not password flow)
+  service account client IDs follow naming: svc-{servicename}-prod (e.g. svc-payments-gw-prod)
+
+CERTIFICATE MANAGEMENT
+  auth-svc TLS cert: wildcard *.company.internal, expires 2026-02-15
+  renew at 90 days before expiry - zabbix alert configured for 90-day warning
+  cert is managed by: security-ops team
+  payments-gw TLS cert: *.company.internal (same wildcard), expires 2026-02-15
+  swift adapter cert: separate cert, managed by network team + swift compliance
+    SWIFT_CERT_EXPIRY = 2025-09-30 - this one is sooner, watch it
+
+ACCESS CONTROL (IAM)
+- all human access to prod follows break-glass procedure via CyberArk PAM
+  no direct SSH with static credentials to prod. all sessions proxied through bastion: 10.10.50.5
+  bastion host requires MFA (TOTP via Keycloak)
+  session recording enabled - all prod SSH sessions are recorded and retained for 90 days
+- service-to-service auth: OAuth2 client credentials via AUTH-SVC
+  payments GW → CBS: uses svc-payments-gw-prod client
+  fraud engine → payments GW: uses svc-fraud-engine-prod client
+  all service accounts rotate client secrets every 90 days (automated via vault)
+
+RECENT SECURITY EVENTS
+- december 2024: QRadar alert on unusual payment amounts from single account
+  investigated by risk tech: test account not correctly flagged as test. false positive.
+  account correctly flagged now. no fraud detected.
+- february 2025: external pen test completed. no critical findings.
+  medium findings: LDAP plaintext (port 389) flagged - migration to LDAPS scheduled Q3 2025
+  low findings: some internal services not enforcing TLS 1.2+ minimum - remediation in progress
+
+SECURITY ROADMAP (Q2/Q3 2025)
+- LDAP → LDAPS migration (port 389 → 636): Q3 2025
+- TLS 1.2 minimum enforcement: Q2 2025
+- Keycloak 23.x upgrade: Q3 2025
+- SWIFT cert renewal (expires 2025-09-30): must complete by August 2025
+
+ESCALATION
+- security incidents: security-ops@company.com + PagerDuty security rotation (24/7)
+- cert issues: security-ops@company.com (business hours) / PagerDuty (after hours if cert expired)
+- auth-svc production issues: security-ops@company.com + platform-eng@company.com simultaneously

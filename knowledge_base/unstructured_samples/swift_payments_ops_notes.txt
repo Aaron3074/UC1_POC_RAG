@@ -1,0 +1,58 @@
+swift and international payments - compliance and ops notes
+author: payments team lead
+last updated: january 2025
+for internal use - supplements formal SWIFT integration spec
+
+SWIFT OVERVIEW FOR NON-PAYMENTS PEOPLE
+SWIFT (Society for Worldwide Interbank Financial Telecommunication) is the network we use
+for international payment messages. Every international transfer goes through the SWIFT-ADAPTER.
+
+The SWIFT-ADAPTER sits in the DMZ (10.10.100.0/24). It's the only component with direct 
+external network access (to the SWIFT network). All other components are internal.
+
+SWIFT MESSAGE TYPES WE USE
+- MT103: single customer credit transfer (most common, retail international payments)
+- MT202: financial institution transfer (interbank, large value)
+- MT940/942: account statements (reconciliation, end-of-day)
+
+HOW A PAYMENT FLOWS (step by step for new people)
+1. Customer initiates payment via online banking / API
+2. Payments Gateway (10.10.1.20:9000) receives the payment request
+3. PAYMENTS-GW calls FRAUD-ENGINE (10.10.1.30:8500) for risk score (synchronous, timeout 500ms)
+4. If fraud score < 0.75 (FRAUD_SCORE_THRESHOLD): payment approved for processing
+5. PAYMENTS-GW calls CBS (10.10.1.10:8080) to debit the source account
+6. For international payments: PAYMENTS-GW calls SWIFT-ADAPTER (10.10.100.20:5432) via internal relay
+7. SWIFT-ADAPTER sends the MT103 message to the SWIFT network
+8. Confirmation message received asynchronously from SWIFT (usually within 1-2 hours for MT103)
+
+CRITICAL TIMINGS
+- Fraud score check must complete in < 500ms or payments GW times out and declines
+- CBS debit call must complete in < 2000ms
+- SWIFT ACK is asynchronous - the payment is "in flight" until confirmed
+- End-of-day reconciliation runs at 23:00 via MT940 statement pull
+
+SWIFT_ADAPTER HOST AND PORT
+  Host: 10.10.100.20 (DMZ)
+  Port: 5432 (internal relay from PAYMENTS-GW to SWIFT-ADAPTER)
+  External SWIFT network connection: managed by network team via F5 BIG-IP (10.10.100.10)
+  SWIFT partner ID (BIC): COMPGB2LXXX
+
+COMPLIANCE NOTES
+- SWIFT messages must be archived for 7 years (regulatory requirement)
+- archive location: SWIFT-ADAPTER writes to object storage (S3-compatible, 10.10.50.90)
+- SWIFT_CERT_EXPIRY = 2025-09-30: the SWIFT connectivity cert expires september 2025.
+  renewal is lead time 12 weeks (SWIFT HSM hardware). must start by June 2025. 
+  owner: payments team + network team + security team (joint)
+- SWIFT CSP (Customer Security Programme) annual audit: scheduled october 2025
+
+KNOWN ISSUES
+- F5 TCP keepalive latency spikes (NET-2025-018): during peak volume, SWIFT latency has
+  occasional spikes from ~180ms to ~600ms. root cause: F5 BIG-IP TCP keepalive settings.
+  network team has a fix scheduled Q2 2025. not causing failed payments, just slower confirmations.
+- monthly SWIFT reconciliation: MT940 statement sometimes arrives 5-10 minutes after 23:00.
+  this is normal SWIFT network variance. do not page anyone for this.
+
+ESCALATION
+- SWIFT outage: payments-lead on PagerDuty + network-team immediately
+  a SWIFT outage = zero international payments processing = SEV-1 immediately
+- SWIFT cert expiry warning: security-ops@company.com + payments team (give 6 months warning)

@@ -1,0 +1,48 @@
+meeting notes - architecture sync - feb 28 2025
+attendees: platform lead, data eng lead, risk tech lead, payments lead, security
+
+quick catch up on open items from q1:
+
+DATA ENGINEERING:
+etl schema validation is now live - this is what should have prevented the aug 2024 incident 
+(INC-2024-0892 where CBS added beneficiary_account_type column and didnt tell anyone, ETL 
+broke overnight). now if CBS changes schema without notifying data eng, the pre-flight check 
+catches it before processing starts. slack channel #schema-changes is mandatory for all schema 
+changes.
+
+snowflake costs are going up - Q1 came in at $52k vs $48.5k budget (8% over). three big 
+ad-hoc analytics queries from BI team ran without query limits. data eng tightening governance 
+- all queries above 1TB scan need approval now.
+
+RISK TECH:
+fraud model v3.4.0 is coming may 2025 - this is the quarterly retrain. new model trained on 
+Q4 2024 + Q1 2025 data including the fraudulent transactions from the v3.3.0 incident. 
+model accuracy on holdout is 96.8% (above the 95% threshold for promotion). 
+redis auto-scaling work is 40% done - sentinel config complete, load testing next.
+FRAUD_REDIS_TTL_SEC will stay at 3600 until auto-scaling is confirmed stable.
+
+PAYMENTS:
+horizontal scale for payments gateway - LB config done, session state refactor is the blocker. 
+payments GW currently stores some state in memory. need to move this to redis before we can 
+put a load balancer in front. targeting may 15 for v2.9.0.
+swift ISO 20022 - infrastructure is ready (since REL-2025-012 / SWIFT adapter v2.1.0). 
+activation needs SWIFT testing cycle. testing slot booked for september 2025.
+
+SECURITY:
+vault integration - auth service first (v1.6.0 june 2025). all other apps follow Q3.
+keycloak token caching (grace period) design is done - when auth service is down, apps can 
+keep using cached tokens for up to 5 min. eliminates the cascade failure we saw in 
+INC-2024-0341 where one auth outage took down everything.
+
+PLATFORM:
+kubernetes cluster provisioning is delayed 3 weeks due to hardware procurement.
+containerisation of python services (payments gw, fraud engine, reporting, auth) was Q3 
+target, might slip to Q4.
+service mesh (istio vs linkerd) poc - engineer bandwidth is stretched. might push to Q4.
+
+open questions / parking lot:
+- who owns the snowflake cost governance? action: data eng to set up query cost alerts
+- when does CBS need DBA approval to go above pool size 150? action: DBA team to document
+- kafka zookeeper to KRaft migration - still targeting Q2 2026. ADR-008 approved in principle.
+
+next sync: end of march 2025

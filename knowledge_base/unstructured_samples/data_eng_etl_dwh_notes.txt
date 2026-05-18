@@ -1,0 +1,64 @@
+data engineering team notes - etl pipelines and dwh
+author: data engineering team
+last updated: april 2025
+these are working notes not the formal workflow guide
+
+ETL PIPELINE OVERVIEW
+the main ETL job is: CBS → Kafka → DWH (Snowflake)
+  - CBS exports transaction data via Kafka topic: cbs.transaction.export
+  - ETL consumer (Python, runs on 10.10.50.60) reads from cbs.transaction.export
+  - transforms and loads into Snowflake fact_transactions table
+  - ETL job runs every 15 minutes via cron (/opt/scripts/etl/run_etl.sh)
+  - ETL job name: ETL-001 (as referenced in operations runbook)
+
+KNOWN ETL ISSUES
+ETL-001 job failure:
+  most common cause: CBS transaction export schema change without ETL team notification
+  INC-2025-0288 root cause: CBS v4.2.0 added beneficiary_account_type column.
+    ETL job failed because the Snowflake staging table didn't have this column.
+    fix: DBA added the column + index. ETL resumed normally.
+  if ETL-001 fails: check /var/log/etl/etl_run.log for schema mismatch errors
+  second most common cause: Snowflake warehouse suspended (cost savings auto-suspend)
+    DWH_SNOWFLAKE_WAREHOUSE = COMPUTE_WH - auto-suspends after 10 min idle
+    ETL job resumes it on next run but first run after suspension takes 60-90 seconds longer
+    this is normal, not an incident
+
+REPORTING SERVICE DEPENDENCY
+REPORTING-SVC reads from Snowflake, NOT from CBS directly.
+  report generation relies on fact_transactions being current (15 min lag max)
+  if reporting SVC is slow: check Snowflake first, not CBS
+  REPORTING-SVC host: 10.10.1.40:8200
+
+SNOWFLAKE KEY FACTS
+account: company-prod.snowflakecomputing.com
+warehouse: COMPUTE_WH (medium, 2 clusters, auto-suspend 10 min)
+database: COMPANY_PROD_DWH
+  key tables:
+    fact_transactions: all payment transactions (ETL loads here every 15 min)
+    fact_fraud_scores: fraud scoring outcomes per transaction
+    dim_customers: customer master (updated daily from CBS)
+    dim_accounts: account master (updated daily from CBS)
+  reporting schema: rpt_* tables (materialised views for regulatory reports)
+
+QUERY COST MANAGEMENT (added Q1 2025 after 8% overspend)
+  query cost alert: any ad-hoc query over 1TB flagged automatically to dataeng@company.com
+  rule: use read replica for analytics queries, never COMPUTE_WH for large ad-hoc exploration
+  Snowflake has a REPORTING_WH (small, 1 cluster) for report jobs - use this for REPORTING-SVC
+  COMPUTE_WH is for ETL jobs only
+
+DATA QUALITY NOTES
+  NaN bug in REL-2024-009: payments GW v2.7.0 introduced a NaN value in fraud_score field
+    for certain transaction types. ETL was loading NaN → Snowflake was rejecting those rows.
+    fix: payments GW v2.7.1 released to fix the NaN. ETL resumes normally.
+    this caused the fraud engine to have incomplete transaction data for ~48 hours.
+    relevant to: any analysis of transaction completeness in Q4 2024
+
+  CBS v4.2.0 missing index (INC-2025-0288):
+    SELECT queries on fact_transactions doing full table scan instead of index scan
+    caused REPORTING-SVC to take 8 minutes for LCR report instead of 45 seconds
+    DBA fix: CREATE INDEX idx_fact_tx_ben_acct ON fact_transactions(beneficiary_account_type);
+
+CONTACTS
+  data eng team: dataeng@company.com
+  snowflake admin: dataeng@company.com (no separate DBA for Snowflake - it's managed by data eng)
+  ETL issues: dataeng@company.com + platform-eng@company.com if infra related

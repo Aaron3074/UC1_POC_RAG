@@ -1,0 +1,58 @@
+platform engineering retro - q1 2025 - internal notes
+facilitator: platform lead
+attendees: platform eng team (6 people), dba lead, network lead
+date: april 3 2025
+these notes are not the official QBR - they are the candid retro version
+
+WHAT WENT WELL
+- december incident (INC-2024-1201) response time was good: 13 minutes total
+  the slack thread worked well as incident comms. keep doing that.
+- fraud engine deployment process improved significantly. v3.2.1 deploy had zero issues.
+  the null rate gate auto-rollback was not triggered. good sign for v3.4.0.
+- zabbix alert tuning: reduced false positive alerts by 40% after the november tuning sprint.
+  previously we were getting 15-20 noise alerts per week. now it's 3-4 meaningful ones.
+- onboarding: new engineers are getting to first PR in an average of 9 days (was 14 days).
+  the new_engineer_onboarding.pptx is working. keep updating it.
+
+WHAT WENT POORLY
+- kafka broker-2 disk issue (INC-2025-0044): this was a known risk from the december retro.
+  we said we'd increase retention policy / move to tiered storage. it didn't happen in time.
+  action item: KAFKA_LOG_RETENTION_HOURS review must be on the Q2 roadmap. no more deferral.
+- CBS v4.2.0 release missed the fact_transactions index (INC-2025-0288).
+  post-deploy testing didn't catch it because the load test doesn't exercise all column indexes.
+  action item: add index coverage check to CBS release testing checklist.
+- snowflake Q1 overspend: 8% over budget. the query cost alerts weren't in place early enough.
+  they're in place now. needs monitoring for Q2.
+- the payments GW LB session state refactor (v2.9.0) has been pushed twice.
+  target was march, now may 15. if it slips again we need a formal project review.
+  the capacity ceiling is ~500 TPS and Q1 peak was 412. headroom is shrinking.
+
+RISKS GOING INTO Q2
+RISK 1: payments gateway capacity headroom
+  current ceiling: ~500 TPS (without LB). peak Q1: 412 TPS. headroom: 88 TPS.
+  if Q2 peak volume grows as projected (+15%), we could hit 475 TPS peak by june.
+  475 TPS is 95% of ceiling. buffer is too thin.
+  mitigation: v2.9.0 LB refactor must land by may 15. if it slips: manual scaling plan needed.
+
+RISK 2: redis auto-scaling not confirmed for fraud engine
+  FRAUD_REDIS_TTL_SEC is locked at 3600 until auto-scaling is confirmed.
+  load test is scheduled for may 2025. if it fails, risk tech's Q2 TTL reduction request stays blocked.
+  mitigation: load test must happen in may. no more delays.
+
+RISK 3: kafka tiered storage not scheduled
+  broker-2 disk was the issue in INC-2025-0044. log compaction restart is a manual workaround.
+  if disk grows faster than compaction can handle, we get another incident.
+  mitigation: add kafka tiered storage to Q2 roadmap as P1 item.
+
+RISK 4: LDAP still on plaintext port 389
+  network team flagged this. AUTH-SVC talks to corporate LDAP on port 389 (not LDAPS 636).
+  security team has it on Q3 roadmap. medium risk - internal network only.
+  mitigation: track in security roadmap. no immediate action unless pen test flags it.
+
+ACTION ITEMS
+- [OPEN] Q2 roadmap: add KAFKA_LOG_RETENTION_HOURS review (owner: platform lead)
+- [OPEN] CBS release checklist: add index coverage check (owner: dba team)
+- [OPEN] payments v2.9.0 session state refactor: hard deadline may 15 (owner: payments team)
+- [OPEN] fraud redis auto-scaling load test: schedule for may 2025 (owner: platform lead + risk tech)
+- [DONE] snowflake query cost alerts: in place as of march 2025 (owner: data eng)
+- [DONE] zabbix false positive tuning: completed Q1 (owner: platform lead)

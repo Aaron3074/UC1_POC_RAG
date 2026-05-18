@@ -1,0 +1,82 @@
+--- forwarded email thread - saved for reference ---
+
+FROM: data eng lead
+TO: platform eng lead, CBS team lead
+SUBJECT: RE: RE: RE: CBS schema change notification process
+
+ok so to summarise what we agreed:
+
+1. any new column added to CBS transaction table must be notified to data eng BEFORE deployment
+2. use the #schema-changes slack channel
+3. data eng gets minimum 3 days notice to update ETL mappings
+4. CBS release checklist now has a mandatory field: "data eng notified Y/N"
+5. if not notified and ETL breaks, CBS team owns the P1 response
+
+this came out of INC-2024-0892 (aug 2024) where CBS added beneficiary_account_type 
+without telling us and the nightly ETL failed silently for 2 hours before anyone noticed. 
+regulatory report was 4 hours late. we notified the regulator and they accepted the delay 
+but it cant happen again.
+
+---
+
+FROM: CBS team lead
+RE: the pool size question
+
+yes CBS_DB_POOL_SIZE is now 100 (was 50, emergency change jan 8 2025 after the dec 22 incident). 
+DBA approved. if anyone wants to go above 150 they need formal DBA approval with impact analysis.
+we now have connection monitoring - alert fires at 80% pool utilisation.
+the december incident (INC-2024-1201) was because december peak volume (35% above normal) 
+exhausted the pool. connections were queuing then timing out. CBS returned 503 for 39 min.
+22,000 transaction attempts failed. not our finest hour.
+
+---
+
+FROM: risk tech lead
+RE: fraud model stuff
+
+just to document what we learnt from the march 2025 incident (INC-2025-0203, v3.3.0):
+- never merge a feature flag mechanism without comprehensive null testing
+- PAYMENTS-GW_FRAUD_THRESHOLD comparison with NaN evaluates to False in python
+- this means null merchant code = no fraud check = transaction goes through
+- 1800 transactions were unscored, 3 were actual fraud, $4200 exposure
+- we rolled back to v3.2.1 same night (REL-2025-009)
+- v3.3.1 fixed with null-safe comparison and added unit test for null inputs
+
+new rule: fraud score null rate >1% in first 15 min post-deploy triggers auto-rollback
+
+also: FRAUD_REDIS_TTL_SEC stays at 3600. we are not touching this until redis auto-scaling 
+is confirmed stable. the dec 2024 incident (INC-2024-1198) showed what happens when redis 
+runs out of memory - 138 min outage, $380K impact. not repeating that.
+
+---
+
+FROM: security lead
+RE: AUTH-SVC token caching
+
+architecture for grace period token caching is finalised:
+- apps cache valid JWTs locally for up to 5 minutes
+- if auth service (keycloak) is unreachable, cached tokens remain valid during grace period
+- after 5 min, requests fail if AUTH-SVC still down
+- revoked tokens could still be used during the grace period (acceptable risk - 5 min window)
+- this prevents the total cascade we saw in INC-2024-0341 (47 min auth outage = everything down)
+
+implementation starts Q2 2025 in auth-svc v1.6.0 (june). vault secrets integration is part 
+of same release.
+
+---
+
+FROM: platform eng lead
+RE: kafka consumer group warning
+
+just a reminder - do NOT change FRAUD_KAFKA_CONSUMER_GROUP or any other kafka consumer group 
+ID in production without coordinating with the owning team first. changing the consumer group 
+resets the kafka offset to the beginning of the topic. for fraud.transaction.events (12 partitions, 
+7 day retention) this means reprocessing potentially millions of historical payment events. 
+this would overwhelm the fraud engine. not good. coordinate first. always.
+
+current consumer groups to never change without coordination:
+- fraud-engine-cg-prod (fraud engine consuming fraud.transaction.events)
+- whatever groups reporting-svc uses for cbs.account.updates
+
+---
+end of forwarded thread

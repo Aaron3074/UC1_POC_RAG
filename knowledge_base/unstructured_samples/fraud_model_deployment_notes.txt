@@ -1,0 +1,57 @@
+fraud model deployment notes - internal - risk tech team
+compiled by: risk tech lead
+covers: fraud-engine model versioning, deployment gates, known constraints
+last updated: april 2025
+
+this is not the formal deployment guide. this is the stuff you need to know that isnt in the formal guide.
+
+MODEL VERSIONING
+current production model: v3.2.1 (deployed Q4 2024)
+next deploy: v3.4.0 - scheduled may 8 2025 (Q2 quarterly retrain)
+  accuracy: 96.8% on holdout set (threshold = 95.0%, must pass to deploy)
+  false positive rate: 0.8% (acceptable threshold = 1.5%)
+  null rate gate: if null rate exceeds 1% in first 15 min post-deploy, auto-rollback triggers
+
+MODEL PARAMETER CONSTRAINTS
+FRAUD_MODEL_VERSION = "3.2.1" (in env, updated by deploy script)
+FRAUD_SCORE_THRESHOLD = 0.75 (scores above this trigger fraud hold)
+  - DO NOT change this without risk committee approval
+  - last changed: Q3 2023 after false positive rate review
+FRAUD_KAFKA_CONSUMER_GROUP = "fraud-scoring-cg-prod" (do not rename, kafka offset tracking depends on this)
+  if you rename the consumer group, offset tracking is lost and the fraud engine will reprocess
+  every message in the partition from the beginning. this caused INC-2024-0991 in september 2024.
+FRAUD_REDIS_TTL_SEC = 3600
+  - redis cache TTL for fraud score results. set to 3600 by platform eng.
+  - risk tech has requested reducing to 1800 for Q2 to improve freshness of repeat transaction scoring
+  - platform eng said NO until redis auto-scaling is confirmed (sentinel config done, load test pending)
+  - do NOT change this even if risk tech asks. they know the constraint.
+FRAUD_BATCH_SIZE = 500 (kafka consumer batch size)
+FRAUD_MAX_RETRIES = 3 (retry on scoring failure before dead-letter queue)
+
+DEPLOYMENT CHECKLIST (unofficial, supplements formal guide)
+1. model accuracy must be >= 95% on holdout set - checked by risk tech before deploy request
+2. false positive rate must be <= 1.5% - checked by risk tech
+3. null rate gate must be configured in deploy script before any deploy
+4. FRAUD_KAFKA_CONSUMER_GROUP must NOT be changed
+5. notify platform-eng@company.com 48 hours before deploy (platform eng co-approval needed)
+6. notify risktech@company.com - they monitor the first hour post-deploy
+7. deploy in off-peak window: target 02:00-04:00 on a weekday
+8. rollback plan: previous model artifacts are kept for 90 days in model registry (10.10.50.80)
+
+KNOWN ISSUES AND GOTCHAS
+- FRAUD_REDIS_TTL_SEC sensitivity: lower TTL = more cache misses = higher latency on payments GW
+  at 900 TTL, payments GW latency spiked from 120ms to 380ms in load test (jan 2025)
+  this is why platform eng wont reduce TTL until auto-scaling is proven
+- kafka consumer group rename caused INC-2024-0991 (offset reset, reprocessing backlog)
+  rule: FRAUD_KAFKA_CONSUMER_GROUP is immutable in prod
+- model warm-up: fraud engine needs 3-5 minutes after deploy before scoring performance stabilises
+  during warm-up, FRAUD_SCORE_THRESHOLD is temporarily raised to 0.85 to reduce false positives
+  this is handled automatically by the deploy script. dont panic if you see fewer holds in first 5 min.
+- v3.4.0 specifically: the new model uses an updated feature vector that includes beneficiary_account_type
+  this field comes from CBS via the payments gateway. CBS v4.2.0+ is required for this field to be present.
+  CBS is already on v4.2.1 in prod so this dependency is met. just noting it.
+
+ESCALATION
+- fraud model scoring issues: risktech@company.com (24/7 on-call during model deploy window)
+- platform/infrastructure issues during fraud deploy: platform-eng@company.com / PE-ONCALL
+- if auto-rollback triggers and you need manual intervention: page both teams simultaneously

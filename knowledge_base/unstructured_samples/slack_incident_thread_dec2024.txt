@@ -1,0 +1,59 @@
+--- SLACK THREAD DUMP - #platform-engineering - saved for reference ---
+--- topic: prod issue discussion + resolution - december 22 2024 ---
+
+[09:44] PAGERDUTY_BOT: ALERT - CBS health check failing - http://10.10.1.10:8080/api/v2/health returning 503
+
+[09:45] platform_lead: on it. checking now
+
+[09:47] platform_lead: CBS is returning 503. checking DB connection pool
+  CBS_DB_POOL_SIZE is 50, checking current connections
+
+[09:48] dba_team: @platform_lead i see it too. pool is exhausted. all 50 connections in use. 
+  new transactions queueing then timing out. december peak volume is insane right now.
+
+[09:49] payments_lead: seeing it from payments side too. payments GW cant reach CBS. 
+  all payment transactions failing. declaring SEV-1.
+
+[09:49] platform_lead: agreed. SEV-1 declared. all hands.
+  @cbs_team @security @data_eng heads up, CBS is down
+
+[09:51] cbs_team_lead: checking. CBS_DB_POOL_SIZE = 50 is way too low for december.
+  we're running at 35% above normal transaction volume.
+  quick math: 500 TPS * 0.6s avg connection hold = 300 concurrent connections needed. we have 50.
+
+[09:52] dba_team: i can approve emergency increase to 80 right now. 
+  typing the config change. need platform approval.
+
+[09:52] platform_lead: approved. do it.
+
+[09:53] dba_team: done. CBS_DB_POOL_SIZE = 80 as emergency. 
+  give it 2-3 min to take effect as existing connections drain.
+
+[09:55] cbs_team_lead: health check returning 200 now. CBS is back.
+
+[09:56] payments_lead: payments processing again. confirming.
+
+[09:57] platform_lead: incident duration 13 min. CBS pool exhausted by december peak.
+  immediate fix: pool to 80.
+  permanent fix: DBA to approve pool size 100 with proper analysis.
+  action item: capacity planning review for december peaks.
+
+[10:00] dba_team: permanent fix approved. CBS_DB_POOL_SIZE = 100. 
+  adding monitoring alert at 80% pool utilisation.
+
+[10:03] platform_lead: INC-2024-1201 filed. will do proper PIR next week.
+  lesson: we need to scale up before december, not during. 
+  december freeze for releases going forward. what about a december scale-up checklist?
+
+[10:05] cbs_team_lead: good idea. CBS pool, payments GW capacity, fraud engine. 
+  all need to be reviewed in november before the december rush.
+
+--- END THREAD ---
+
+follow-up from jan 2025 post-PIR:
+- CBS_DB_POOL_SIZE permanently set to 100 (was 50)
+- pool utilisation alert added to zabbix at 80%
+- december capacity review scheduled for october 2025 (before december freeze kicks in)
+- december freeze policy approved by CTO - no releases dec 1-31 from now on
+- 22,000 transaction attempts failed during the 13-minute outage
+- INC-2024-1201 closed

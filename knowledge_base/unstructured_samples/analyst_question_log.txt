@@ -1,0 +1,80 @@
+ANALYST QUESTION LOG - platform eng slack #ask-platform
+compiled by: platform eng team
+purpose: common questions we keep getting asked. writing them down so we stop repeating ourselves.
+
+---
+Q: what is the CBS session timeout and can we change it?
+A: CBS_SESSION_TIMEOUT_SEC is currently 1800 seconds (30 minutes). PCI-DSS requires minimum 
+   900 seconds (15 min) and max 3600 (60 min). you CAN change it within that range but it 
+   needs a CAB request. dont go below 900 or youll fail the QSA audit.
+
+---
+Q: why is my report showing yesterday's data and not today's?
+A: the DWH (snowflake) is updated nightly by the ETL pipeline which runs from 23:30. 
+   so anything you run before that has data from the previous day (T+1 lag). 
+   if you need same-day data you need to query CBS directly - talk to CBS team for read access.
+   if its past midnight and you still see old data, the ETL might have failed - check airflow 
+   at http://10.10.50.30:8081 or ask data eng.
+
+---
+Q: how do i get access to the fraud engine dashboards?
+A: you need the risk-analyst role in keycloak. submit a ServiceNow access request ticket 
+   (type: Access Request). your manager needs to approve, then security team provisions it.
+   SLA is 2 business days. if urgent for an investigation, security team can do same-day 
+   with manager email approval. contact security-ops@company.com.
+
+---
+Q: the payments portal shows "service temporarily unavailable". what does that mean?
+A: most likely one of: payments GW is down, fraud engine is down (payments GW calls it 
+   synchronously), or CBS is down. check in that order:
+   curl http://10.10.1.20:9000/payments/health
+   curl http://10.10.1.30:8500/fraud/score/health
+   curl http://10.10.1.10:8080/api/v2/health
+   if you cant reach any of them, youre not on MGMT-NET. need VPN.
+
+---
+Q: what is SWIFT BIC code and where is it configured?
+A: BIC (Bank Identifier Code) is BNPAFRPPXXX. configured in SWIFT-ADAPTER as SWIFT_BIC_CODE.
+   this must match the SWIFT network registration. do NOT change this. 
+   any change requires SWIFT operations team + compliance sign-off + SWIFT Alliance testing cycle.
+
+---
+Q: can i query the kafka topics directly?
+A: depends on your role. if youre on MGMT-NET you can use kafka-console-consumer but be careful.
+   do NOT change or commit offsets manually. do NOT reset the consumer group (FRAUD_KAFKA_CONSUMER_GROUP).
+   resetting the consumer group on fraud.transaction.events would cause the fraud engine to 
+   reprocess 7 days worth of transactions - millions of events - and overwhelm the system.
+   if you need to inspect a topic for debugging, read-only consumer is fine, just dont touch offsets.
+
+---
+Q: who approves access to production database directly?
+A: production DB direct access requires sysadmin role which needs CISO approval + manager.
+   time-limited to 90 days, all sessions recorded via PAM. not something we give out easily.
+   in 99% of cases you should be using the application APIs or the DWH for data access.
+   what specifically do you need? there might be an API that covers your use case.
+
+---
+Q: the auth service was down for 47 minutes in may 2024. what happened?
+A: INC-2024-0341. a junior engineer changed the AUTH-SVC config file manually (not via the 
+   CI/CD pipeline). the PostgreSQL password had a trailing whitespace. keycloak couldnt connect 
+   to its database. since ALL apps validate tokens against AUTH-SVC, 100% of user sessions 
+   dropped. 8400 active sessions lost.
+   fix: all config changes now go through CI/CD pipeline only. manual config edits are blocked.
+   keycloak health check now probes DB connectivity not just process health.
+
+---
+Q: what ports are blocked at the perimeter?
+A: blocked: 23 (telnet), 21 (FTP), 80 (HTTP - redirects to 443), 3389 (RDP).
+   use SSH (port 22) from MGMT-NET, SFTP for file transfer, HTTPS everywhere.
+   if you need a new port opened: CAB request in ServiceNow, type Network Change.
+   5 business day SLA for approval.
+
+---
+Q: how do i know if the fraud model is performing well after an update?
+A: check FRAUD_MODEL_VERSION first to confirm which version is active.
+   model performance metrics are in the fraud engine ML dashboard (risk tech team has access).
+   key metric: null score rate. if null rate exceeds 1% post-deploy, auto-rollback fires.
+   after the v3.3.0 incident (march 2025) where null merchant codes bypassed fraud checks,
+   we added automated null rate gate in the deployment pipeline.
+   if you see legitimate payments being blocked at unusual rates: PAYMENTS-GW_FRAUD_THRESHOLD 
+   is 0.75 by default. any change requires Risk Tech + Payments Team sign-off + CAB.

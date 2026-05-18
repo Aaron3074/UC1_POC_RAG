@@ -1,0 +1,83 @@
+new analyst / new joiner questions answered - compiled from slack threads
+compiled by: platform engineering team
+this is a living doc - add questions as they come up
+last updated: may 2025
+
+Q: what is CBS?
+A: Core Banking System. It's the mainframe-era system that holds all account data, balances, and 
+   transaction history. When people say "the core", "the mainframe", or "account system" they mean CBS.
+   Host: 10.10.1.10, Port: 8080. API endpoint: http://10.10.1.10:8080/api/v2/
+   CBS is owned by the CBS team (cbs-ops@company.com). Platform eng does the infra.
+
+Q: what's the difference between CBS and Payments Gateway?
+A: CBS is the backend account ledger. Payments Gateway (PAYMENTS-GW) is the transaction processor.
+   When a payment happens: Payments GW receives it → calls Fraud Engine for a risk score → 
+   calls CBS to debit/credit the accounts → returns confirmation. 
+   CBS doesn't talk to the outside world. Payments GW does. 
+   PAYMENTS-GW host: 10.10.1.20, Port: 9000.
+
+Q: why does fraud engine matter for payments?
+A: Payments GW calls Fraud Engine (FRAUD-ENGINE) synchronously on every transaction.
+   If fraud engine is down or slow, payments are blocked or delayed. 
+   FRAUD_SCORE_THRESHOLD = 0.75. Above that score, the payment is held for manual review.
+   FRAUD-ENGINE host: 10.10.1.30, Port: 8500.
+
+Q: what is AUTH-SVC / why do I see 401 errors?
+A: AUTH-SVC is the Keycloak SSO service. It's the identity provider for all internal apps.
+   401 errors mean the auth token is invalid or expired. 
+   If EVERYONE is getting 401s simultaneously: AUTH-SVC is probably down. Check health first.
+   AUTH-SVC health: curl https://10.10.1.50:8443/auth/health (expected: {"status":"UP"})
+   If just one user: account might be locked (AUTH_MAX_LOGIN_ATTEMPTS = 5 failed logins = locked).
+
+Q: what is REPORTING-SVC and why is it sometimes slow?
+A: Reporting Service (REPORTING-SVC) generates regulatory reports (LCR, NSFR, etc.)
+   Host: 10.10.1.40, Port: 8200. It reads from Data Warehouse (Snowflake), not from CBS directly.
+   When it's slow, check DWH first (Snowflake console), not REPORTING-SVC itself.
+   The slowness in march 2025 was a missing index on fact_transactions (INC-2025-0288). 
+   DBA added it. Should be fine now.
+
+Q: what is Kafka used for?
+A: Kafka is the message bus. Fraud transactions go through Kafka topic fraud.transaction.events.
+   Kafka cluster is at 10.10.1.70-72 (3 brokers), port 9092.
+   FRAUD_KAFKA_CONSUMER_GROUP = "fraud-scoring-cg-prod" - do not change this. 
+   Changing the consumer group name caused INC-2024-0991 (offset reset, full reprocessing).
+   Consumer lag on fraud.transaction.events is monitored by Zabbix.
+
+Q: where is monitoring?
+A: three places:
+   - Zabbix: http://10.10.50.30 (infra, host health, disk, pool usage, kafka lag)
+   - Datadog: https://app.datadoghq.com (APM, application metrics, dashboards)
+   - Kibana: http://10.10.50.50:5601 (logs, from MGMT-NET only)
+   - QRadar: 10.10.50.40 (SIEM, security events only)
+
+Q: what is the SLA for CBS / payments?
+A: CBS SLA: 99.9% availability (target), 99.87% actual Q1 2025 (below target due to INC-2024-1201)
+   Payments GW SLA: 99.95% target, 99.91% actual Q1 2025
+   Full SLA register is in sla_register_and_actuals.txt in the knowledge base.
+
+Q: who do I call when X is broken?
+A: CBS issues: cbs-ops@company.com or CBS manager on PagerDuty
+   Payments issues: payments-lead on PagerDuty
+   Fraud / model scoring: risktech@company.com
+   Auth / SSO: security-ops@company.com
+   Infra / network: platform-eng@company.com / PE-ONCALL PagerDuty
+   Data warehouse: dataeng@company.com
+   DBA: dba-team@company.com / dba-oncall PagerDuty
+
+Q: what are MGMT-NET and APP-NET?
+A: VLAN segments. APP-NET (10.10.1.0/24) is where prod services run.
+   MGMT-NET (10.10.50.0/24) is management: monitoring, bastion, ops tools.
+   You SSH to prod via bastion host (10.10.50.5) - direct SSH to app servers is not allowed.
+   All monitoring dashboards are on MGMT-NET.
+
+Q: what is the release process?
+A: All production changes go through CAB (Change Advisory Board).
+   Emergency changes can be approved by platform lead + relevant team lead (as in INC-2024-1201 pool change).
+   Release windows: every two weeks, alternating tuesdays. December is frozen (no releases dec 1-31).
+   Release register is in release_change_register.txt.
+
+Q: what is the december freeze?
+A: After INC-2024-1201 (CBS pool exhaustion at december peak volume), the CTO approved a policy:
+   no production releases December 1-31. The december period has 35% above normal transaction volume.
+   Changes to cope with december (like CBS_DB_POOL_SIZE = 100) are done in October/November.
+   December capacity review is now scheduled for October 2025.

@@ -1,0 +1,46 @@
+notes from the call with risk tech and platform eng - march 2025
+
+ok so these are the important parameters that keep causing issues. writing this down so 
+we stop having to ask each other every time something breaks.
+
+FRAUD ENGINE stuff:
+- FRAUD_REDIS_TTL_SEC is currently 3600 (one hour). DO NOT change this without platform eng 
+  sign off. when risk tech changed it to 300 in dec 2024 redis ran out of memory and we had 
+  a 138 min outage. the redis memory limit is 32GB and at 300sec TTL we were writing 12x more 
+  frequently than the memory could handle.
+- FRAUD_MODEL_VERSION is currently v3.2.1 (was briefly v3.3.0 but that got rolled back because 
+  of the NaN bug with null merchant codes). v3.4.0 is coming in may 2025.
+- FRAUD_KAFKA_CONSUMER_GROUP = "fraud-engine-cg-prod" - if you change this it resets the 
+  kafka offset and reprocesses all historical messages. bad idea in prod. coordinate first.
+- PAYMENTS-GW_FRAUD_THRESHOLD = 0.75 by default. if you lower it you get more false positives 
+  (legitimate payments getting blocked). if risk tech wants to change this they need to tell 
+  platform eng and payments team first.
+
+CORE BANKING (CBS) stuff:
+- CBS_DB_POOL_SIZE was 50, is now 100 (fixed after the dec 2024 incident where we ran out of 
+  connections during peak load). if you want to go above 150 you need DBA approval.
+- CBS_SESSION_TIMEOUT_SEC = 1800 (30 min). PCI-DSS says minimum 900 seconds (15 min), max 
+  3600 (60 min). dont go below 900 or youll fail the audit.
+- CBS_BATCH_WINDOW_START = 23:00 - this is when EOD reconciliation kicks off. the DWH ETL 
+  starts at 23:30 so there's a 30 min buffer. dont change these without telling data eng.
+- CBS_MAX_TXN_RETRY = 3. dont set above 5 or you risk duplicate transactions.
+
+PAYMENTS GATEWAY:
+- PAYMENTS-GW_TXN_TIMEOUT = 30000ms (30 seconds). multiply by CBS_MAX_TXN_RETRY and you get 
+  90 sec worst case for a transaction to fail completely.
+- PAYMENTS-GW_MAX_PAYLOAD_SIZE_MB = 5.0. requests above this get HTTP 413.
+
+AUTH SERVICE (keycloak):
+- AUTH_TOKEN_EXPIRY_SEC = 900 (15 min JWT access token)
+- AUTH_REFRESH_TOKEN_EXPIRY_SEC = 86400 (24 hours for refresh token)  
+- AUTH_MAX_LOGIN_ATTEMPTS = 5 then account gets locked for 15 min. governed by SEC-POL-003.
+
+SWIFT:
+- SWIFT_TIMEOUT_SEC = 120. SWIFT network usually responds in 30-90 sec.
+- SWIFT_MAX_TRANSFER_LIMIT_USD = 5,000,000. above this needs manual compliance approval before 
+  SWIFT-ADAPTER will process it.
+
+general rule: any parameter change in prod needs a CAB ticket. even if it seems small. 
+the dec 2024 incidents (both of them) were caused by parameter changes that bypassed CAB.
+
+contact for parameter questions: platform-eng@company.com or raise in #platform-engineering slack

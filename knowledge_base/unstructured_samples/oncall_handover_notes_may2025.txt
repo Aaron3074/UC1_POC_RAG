@@ -1,0 +1,45 @@
+on call handover - friday may 2 2025 - passing to weekend on call
+
+aaron handing over to priya. few things to watch:
+
+OPEN ITEMS:
+- payments GW horizontal scale is in progress (v2.9.0). session state refactor not done yet so 
+  we cant actually go live with the LB. target was may 15 but might slip. keep an eye on 
+  peak TPS - we're at 412 peak in Q1, ceiling is ~500. if we see 480+ on any given day page platform eng.
+
+- redis auto-scaling for fraud engine. sentinel config is done. load testing is next week.
+  FRAUD_REDIS_TTL_SEC is locked at 3600 until auto-scaling is confirmed. do NOT change this.
+  any request from risk tech to reduce TTL needs platform eng co-approval. they know this.
+
+- kafka broker-2 disk usage was at 67% last check (10.10.1.71). not urgent but watch it.
+  if it hits 80% the zabbix alert fires. just restart the log compaction job if needed:
+  kafka-log-dirs.sh --bootstrap-server 10.10.1.70:9092 --topic-list fraud.transaction.events
+  INC-2025-0044 was caused by this exact thing in january.
+
+- snowflake cost - Q1 was 8% over budget. data eng put query cost alerts in place. 
+  if you see any ad-hoc queries over 1TB in the snowflake console flag to data eng lead.
+
+SCHEDULED THIS WEEKEND:
+- fraud model v3.4.0 is deploying thursday may 8. this is the Q2 quarterly model retrain.
+  new model tested at 96.8% accuracy (above 95% threshold). null rate gate is in place now.
+  if null rate exceeds 1% in first 15 min post-deploy, pipeline auto-rollbacks to v3.2.1.
+  risk tech team is monitoring. dont need to do anything unless pagerduty fires.
+  
+- NO other releases this weekend. may 15 is next release window (payments v2.9.0 if LB refactor done).
+
+THINGS THAT WERE WEIRD THIS WEEK:
+- tuesday: got a SIEM alert from QRadar about unusual payment amounts for one account.
+  risk tech investigated - turned out to be a test account that was accidentally not flagged.
+  no actual fraud. account flagged now.
+  
+- wednesday: reporting SVC was slow at about 09:30. took ~8 min to generate the LCR report.
+  checked DWH - turned out there was a missing index on fact_transactions from the CBS v4.2.0 
+  release (new beneficiary_account_type column). DBA added the index. should be fine now.
+  INC-2025-0288 was filed for this.
+
+CONTACTS THIS WEEKEND:
+- CBS issues: cbs-ops@company.com or CBS manager on PagerDuty
+- Fraud/model: risktech@company.com - they're monitoring the may 8 deploy
+- anything critical: platform-eng@company.com / PE-ONCALL
+
+good luck. should be quiet but you never know with december... oh wait its may. we're fine.
