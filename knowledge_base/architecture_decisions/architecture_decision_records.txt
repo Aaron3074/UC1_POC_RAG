@@ -1,0 +1,201 @@
+DOCUMENT: Architecture Decision Records — Core Platform
+SOURCE_FORMAT: PowerPoint Presentation (architecture_decisions_2024_2025.pptx)
+TOPIC: Architecture Decisions, ADR, Technology Choices, Design Rationale
+VERSION: 2.0
+LAST UPDATED: 2025-02-28
+OWNER: Architecture Team
+AUDIENCE: Engineering Leads, CTO, Platform Teams
+
+===========================
+SLIDE 1 — TITLE
+===========================
+
+Architecture Decision Records
+Core Banking Platform — 2024/2025
+Decisions that shaped the current system architecture
+Architecture Review Board Approved
+
+===========================
+SLIDE 2 — ADR-001: Choice of Kafka as Event Backbone
+===========================
+
+DECISION: Use Apache Kafka as the central event streaming platform
+STATUS: Accepted | DATE: 2024-03-15 | DECIDER: CTO + Architecture Team
+
+CONTEXT:
+  The system required decoupled, asynchronous communication between CBS, Payments,
+  and Fraud Engine. Direct API calls created tight coupling and cascading failures
+  (e.g. if Fraud Engine slows down, it blocked payment processing).
+
+OPTIONS CONSIDERED:
+  Option A — Apache Kafka (chosen)
+    Pros: High throughput (1M+ msgs/sec), persistent log, replay capability,
+          strong ecosystem, battle-tested at financial scale.
+    Cons: Operational complexity, Zookeeper dependency (now KRaft in 3.5+),
+          steep learning curve for new engineers.
+
+  Option B — RabbitMQ
+    Pros: Simpler to operate, good for task queues, native AMQP.
+    Cons: Not designed for high-throughput streaming, no built-in replay,
+          messages deleted on consumption (no audit trail without plugins).
+
+  Option C — AWS SQS/SNS
+    Pros: Fully managed, zero ops overhead.
+    Cons: Vendor lock-in violates data sovereignty policy, latency higher
+          than on-prem, cannot run in air-gapped DR scenario.
+
+DECISION RATIONALE:
+  Kafka's persistent log is critical for the fraud audit trail — messages must
+  be replayable for investigation and regulatory compliance. RabbitMQ's
+  fire-and-forget model is insufficient. AWS SQS rejected due to data residency policy.
+
+CONSEQUENCES:
+  - All inter-service events now flow through Kafka topics
+  - Teams must manage consumer group offsets carefully (see Kafka guide)
+  - Fraud Engine scoring now fully asynchronous — eliminates blocking in PAYMENTS-GW
+  - Replay capability enables fraud investigation replay (key for compliance)
+
+===========================
+SLIDE 3 — ADR-002: Keycloak for Centralised Authentication
+===========================
+
+DECISION: Deploy Keycloak as the single Identity Provider (IdP) for all applications
+STATUS: Accepted | DATE: 2024-05-01 | DECIDER: Security Team + Architecture Team
+
+CONTEXT:
+  Each application had its own user database and auth logic. CBS used LDAP directly,
+  Payments had a custom JWT implementation, Reporting used basic auth.
+  This created inconsistent security posture, duplicated user management, and
+  made enforcing MFA/SSO impossible.
+
+OPTIONS CONSIDERED:
+  Option A — Keycloak (chosen)
+    Pros: Open source, OIDC/OAuth2 compliant, supports LDAP federation,
+          RBAC built-in, active community, self-hosted (no vendor dependency).
+    Cons: JVM-based (resource-heavy), requires dedicated ops knowledge.
+
+  Option B — Okta (SaaS)
+    Pros: Fully managed, excellent UX, enterprise support.
+    Cons: Expensive at scale (~$4/user/month), external data residency concern,
+          not viable for air-gapped DR site.
+
+  Option C — Custom JWT Service
+    Pros: Full control, lightweight.
+    Cons: Security risk (reinventing auth), no MFA out-of-box, maintenance burden.
+
+DECISION RATIONALE:
+  Keycloak provides enterprise-grade auth without vendor lock-in or SaaS cost.
+  LDAP federation allows existing corporate directory reuse.
+  All apps now implement OIDC — zero custom auth code in application layer.
+
+CONSEQUENCES:
+  - AUTH-SVC (Keycloak) is now a Tier 1 critical dependency — single point of auth failure
+  - All applications validate JWTs against AUTH-SVC on every request
+  - Token expiry (AUTH_TOKEN_EXPIRY_SEC = 900) must be managed carefully
+  - Password policy, MFA, and session management now centralised and auditable
+
+===========================
+SLIDE 4 — ADR-003: Snowflake for Data Warehouse (Hybrid Model)
+===========================
+
+DECISION: Use Snowflake as the analytical data warehouse in a hybrid model
+STATUS: Accepted | DATE: 2024-07-10 | DECIDER: Data Engineering + CTO
+
+CONTEXT:
+  Analytical queries on the Oracle CBS database were degrading transaction performance.
+  Read-heavy reporting queries running on the OLTP database caused lock contention
+  and contributed to latency spikes. A separate analytical store was required.
+
+OPTIONS CONSIDERED:
+  Option A — Snowflake (chosen)
+    Pros: Separation of compute and storage, auto-scaling, excellent SQL support,
+          zero-copy cloning for dev/test, native time-travel for point-in-time analysis.
+    Cons: Cloud-hosted (data residency risk mitigated by region selection),
+          per-query cost model requires careful query governance.
+
+  Option B — On-prem PostgreSQL Replica
+    Pros: No cloud dependency, low cost, familiar stack.
+    Cons: No elastic scaling, reporting queries could still strain shared hardware,
+          operational burden of managing replication lag and failover.
+
+  Option C — Apache Hive on Hadoop
+    Pros: Open source, scalable.
+    Cons: High operational complexity, slow query performance vs Snowflake,
+          engineering team lacks Hadoop expertise.
+
+DECISION RATIONALE:
+  Snowflake's compute/storage separation allows analytical workloads to scale
+  independently of CBS transaction load. Time-travel feature enables regulatory
+  point-in-time reporting without maintaining separate snapshots.
+  Data residency mitigated by selecting an in-region Snowflake deployment.
+
+CONSEQUENCES:
+  - ETL pipeline (dag_cbs_to_dwh) runs nightly — DWH data is T+1 (one day lag)
+  - Real-time analytics not supported — analysts must use CBS directly for same-day data
+  - Snowflake query cost governance policy required (see Data Governance doc)
+  - DR scenario: Snowflake is Tier 3 (RTO 24hr) — reports unavailable during major DR event
+
+===========================
+SLIDE 5 — ADR-004: Python as Primary Application Language
+===========================
+
+DECISION: Standardise on Python 3.11+ for all new application development
+STATUS: Accepted | DATE: 2024-01-20 | DECIDER: Architecture Team
+
+CONTEXT:
+  The codebase had fragmentation: CBS and SWIFT-ADAPTER in Java, Payments and Fraud Engine
+  in Python, Reporting in a mix. This made cross-team contributions difficult and
+  increased the hiring surface. A standardisation decision was needed.
+
+EXCEPTIONS:
+  - CBS remains Java (core banking vendor constraint, rewrite out of scope)
+  - SWIFT-ADAPTER remains Java (SWIFT Alliance SDK is Java-only)
+
+DECISION RATIONALE:
+  Python 3.11 provides significant performance improvements over 3.9/3.10.
+  Fraud Engine and ML workloads benefit from Python's ML ecosystem (scikit-learn, pandas).
+  Payments team already Python-proficient. Reduces cognitive load across teams.
+
+CONSEQUENCES:
+  - All new microservices must use Python 3.11+ (enforced in CI pipeline)
+  - Java exceptions documented for CBS and SWIFT-ADAPTER (frozen codebases)
+  - Shared internal Python libraries maintained by Platform Engineering
+  - FastAPI adopted as standard web framework for new services
+
+===========================
+SLIDE 6 — ADR-005: On-Prem First, Cloud Egress (Hybrid Strategy)
+===========================
+
+DECISION: Primary infrastructure on-premises; cloud for specific workloads only
+STATUS: Accepted | DATE: 2024-02-01 | DECIDER: CTO + Risk Committee
+
+RATIONALE:
+  Regulatory requirement: customer financial data must remain within jurisdiction.
+  On-prem DC-WEST is primary. DC-EAST is DR. Cloud (AWS) used only for:
+    - DNS failover (Route 53)
+    - Cold storage archival (Glacier)
+    - Synthetic monitoring (CloudWatch)
+    - Snowflake DWH (in-region, contractually governed)
+
+CLOUD BOUNDARY POLICY:
+  PERMITTED in cloud  : Monitoring metadata, anonymised analytics, archived records >7yr
+  NOT PERMITTED       : Live customer PII, real-time transaction data, auth credentials
+  REVIEW REQUIRED     : Any new cloud service must pass Security + Legal review before adoption
+
+===========================
+SLIDE 7 — OPEN DECISIONS (Pending ARB)
+===========================
+
+ADR-006 (PROPOSED): Service Mesh Adoption — Istio vs Linkerd
+  Context: Growing number of microservices makes mTLS and observability complex.
+  Status: Under evaluation. PoC running in staging. Decision expected Q3 2025.
+  Key question: Operational overhead of Istio vs lighter-weight Linkerd.
+
+ADR-007 (PROPOSED): Containerisation Roadmap — Docker + Kubernetes
+  Context: CBS and SWIFT-ADAPTER run on bare metal. All Python services on VMs.
+  Status: Proposed. Kubernetes PoC planned Q4 2025.
+  Constraint: CBS Java stack must be containerised with vendor sign-off.
+
+ADR-008 (PROPOSED): Replace Zookeeper with KRaft in Kafka
+  Context: Kafka 3.5+ supports KRaft (no Zookeeper dependency). Simplifies ops.
+  Status: Approved in principle. Migration scheduled Q2 2026.

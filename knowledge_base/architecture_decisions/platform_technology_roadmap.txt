@@ -1,0 +1,173 @@
+DOCUMENT: Platform Technology Roadmap 2025–2026
+SOURCE_FORMAT: PowerPoint Presentation (platform_roadmap_2025_2026.pptx)
+TOPIC: Technology Roadmap, Strategic Initiatives, Platform Evolution, Milestones
+VERSION: 1.3
+LAST UPDATED: 2025-03-31
+OWNER: CTO Office + Architecture Team
+AUDIENCE: Executive Leadership, Engineering Leads, Business Stakeholders
+
+===========================
+SLIDE 1 — TITLE
+===========================
+
+Platform Technology Roadmap
+2025 – 2026: From Stability to Scale
+Building the foundation for 10x transaction growth
+Approved by Risk Committee and CTO — March 2025
+
+===========================
+SLIDE 2 — STRATEGIC THEMES
+===========================
+
+THEME 1: RESILIENCE
+  Reduce SEV-1/2 incidents from 5 (2024) to <2 (2025 target)
+  Key initiatives: December Freeze, AUTH-SVC token caching, PAYMENTS-GW horizontal scale,
+                   Redis auto-scaling, automated rollback gates.
+  Owner: Platform Engineering
+
+THEME 2: SCALE
+  Support 10x transaction growth without architecture redesign
+  Current ceiling: ~500 TPS (PAYMENTS-GW). Target: 5,000 TPS by end 2026.
+  Key initiatives: PAYMENTS-GW horizontal scale, Kafka partition increase, CBS DB sharding study.
+  Owner: Architecture Team
+
+THEME 3: DEVELOPER EXPERIENCE
+  Reduce time-to-production for new features from 3 weeks to 1 week.
+  Key initiatives: Containerisation (Docker/K8s), service mesh (Istio/Linkerd PoC),
+                   shared Python libraries, improved CI/CD pipeline.
+  Owner: Platform Engineering + Each Application Team
+
+THEME 4: COMPLIANCE MODERNISATION
+  ISO 20022 migration, enhanced audit logging, automated regulatory reporting.
+  Key initiatives: SWIFT ISO 20022 activation, Basel III v2 reports, automated GDPR erasure.
+  Owner: Compliance + Data Engineering
+
+===========================
+SLIDE 3 — Q2 2025 MILESTONES (April–June)
+===========================
+
+MILESTONE: PAYMENTS-GW Horizontal Scale [THEME: SCALE]
+  What: Deploy second PAYMENTS-GW instance behind load balancer (NGINX).
+        Doubles effective TPS ceiling from 500 to ~1,000.
+  Status: REL-2025-015 planned May 15 (v2.9.0).
+  Dependencies: NGINX load balancer config, session affinity for SWIFT-ADAPTER calls.
+  Risk: Session state must be externalised (Redis). PAYMENTS-GW currently stores some
+        session state in-memory — must be refactored before LB can be added.
+  Owner: Payments Team + Platform Engineering
+
+MILESTONE: Fraud Engine Redis Auto-Scaling [THEME: RESILIENCE]
+  What: Replace fixed-memory Redis with Redis Sentinel + memory auto-scaling config.
+        Eliminates OOM risk that caused INC-2024-1198.
+  Status: In progress. Expected completion: May 2025.
+  Owner: Risk Technology + Platform Engineering
+
+MILESTONE: AUTH-SVC Token Caching (Grace Period) [THEME: RESILIENCE]
+  What: Applications cache valid JWTs locally for up to 5 minutes.
+        If AUTH-SVC is unavailable, cached tokens remain valid during grace period.
+        Eliminates total service loss from AUTH-SVC brief outages.
+  Status: Architecture design complete. Implementation Q2 2025.
+  Note: Grace period is 5 min — balances resilience vs security (revoked tokens).
+  Owner: Security Team + all application teams
+
+MILESTONE: Automated ETL Schema Validation [THEME: RESILIENCE]
+  What: ETL pre-flight check validates CBS source schema before processing.
+        If schema mismatch detected, ETL halts and alerts — no silent failure.
+  Status: Deployed March 2025 (action from INC-2024-0892).
+  Owner: Data Engineering ✓ DONE
+
+===========================
+SLIDE 4 — Q3 2025 MILESTONES (July–September)
+===========================
+
+MILESTONE: Containerisation Phase 1 — Python Services [THEME: DEVELOPER EXPERIENCE]
+  What: Dockerise PAYMENTS-GW, FRAUD-ENGINE, REPORTING-SVC, AUTH-SVC.
+        Deploy to Kubernetes (K8s) cluster (on-prem, provisioned Q2 2025).
+        CBS and SWIFT-ADAPTER excluded (Phase 2 — requires vendor sign-off).
+  Expected benefits: Faster deployments (minutes vs hours), auto-healing pods,
+                     horizontal scaling via HPA (Horizontal Pod Autoscaler).
+  Owner: Platform Engineering
+  Risk: Teams need K8s upskilling. Training budget approved.
+
+MILESTONE: Service Mesh PoC Decision [THEME: DEVELOPER EXPERIENCE]
+  What: Complete Istio vs Linkerd PoC in staging. ARB decision by August 2025.
+  Evaluation criteria: Operational overhead, mTLS performance impact, observability.
+  Owner: Architecture Team
+
+MILESTONE: FRAUD-ENGINE GPU Offload Evaluation [THEME: SCALE]
+  What: Evaluate GPU-accelerated model inference for Fraud Engine.
+        Current CPU peak 94% — GPU offload could reduce to <30% while improving latency.
+  Scope: Benchmark only in Q3. Procurement and deployment Q4 if approved.
+  Owner: Risk Technology
+
+MILESTONE: Vault Secrets Integration [THEME: RESILIENCE]
+  What: Migrate all application secrets (DB passwords, API keys, SWIFT credentials)
+        from config files and environment variables to HashiCorp Vault.
+        Eliminates risk of secrets in config files (root cause of INC-2024-0341).
+  Status: AUTH-SVC first (v1.6.0 June). Others follow Q3.
+  Owner: Security Team
+
+===========================
+SLIDE 5 — Q4 2025 MILESTONES (October–December)
+===========================
+
+MILESTONE: SWIFT ISO 20022 (MX Format) Activation [THEME: COMPLIANCE]
+  What: Activate ISO 20022 MX message format for SWIFT transfers.
+        SWIFT mandate: all financial institutions must support MX by end 2025.
+        Infrastructure ready since REL-2025-012. Activation requires SWIFT testing cycle.
+  Risk: SWIFT Alliance testing takes 6–8 weeks. Must initiate by October to meet deadline.
+  Owner: Payments Team + SWIFT Operations
+
+MILESTONE: December Freeze (First Year) [THEME: RESILIENCE]
+  What: Zero production releases December 1–31, 2025.
+        All teams must complete releases by November 28.
+  Status: Policy approved. Engineering leads confirmed.
+
+MILESTONE: CBS DB Partitioning Study [THEME: SCALE]
+  What: DBA team to complete Oracle DB partitioning analysis.
+        CBS Oracle DB projected to hit 80% capacity May 2026 at current growth rate.
+        Partitioning and archival could extend capacity by 18–24 months.
+  Owner: DBA Team + CBS Team
+
+===========================
+SLIDE 6 — 2026 HORIZON INITIATIVES
+===========================
+
+INITIATIVE: Kafka KRaft Migration (Zookeeper Elimination) [Q2 2026]
+  ADR-008 approved in principle. Eliminates Zookeeper operational overhead.
+  Kafka 3.5+ fully supports KRaft mode. Migration requires coordinated rolling upgrade.
+
+INITIATIVE: CBS Containerisation [Q2–Q3 2026]
+  CBS (Java) containerisation requires vendor sign-off from core banking vendor.
+  Discussion initiated. Timeline uncertain — vendor SLA for sign-off is 6 months.
+
+INITIATIVE: Real-Time Analytics Layer [Q3 2026]
+  Current: Analytics is T+1 (Snowflake DWH, nightly ETL).
+  Target: T+5min for key metrics using Kafka Streams or Apache Flink.
+  Business driver: Trading desk and fraud team need near-real-time position data.
+
+INITIATIVE: 5,000 TPS Target Architecture [2026]
+  Current: ~500 TPS ceiling (single PAYMENTS-GW).
+  Q2 2025: 1,000 TPS (horizontal scale).
+  2026 target: 5,000 TPS requires: CBS connection pooling redesign, Kafka partition increase
+               to 48 (from 12), multiple PAYMENTS-GW instances with shared Redis session store,
+               potential CBS read replica for balance lookups.
+
+===========================
+SLIDE 7 — RISKS AND DEPENDENCIES
+===========================
+
+RISK 1: Containerisation timeline may slip
+  If K8s cluster provisioning delayed, Phase 1 containerisation pushed to Q4 2025.
+  Mitigation: Parallel track — containerisation can begin on existing VM infrastructure.
+
+RISK 2: CBS vendor sign-off for containerisation (2026)
+  Vendor has not yet committed to timeline. If delayed beyond Q3 2026, CBS remains on bare metal.
+  Mitigation: CBS containerisation is NOT on critical path for 5,000 TPS target.
+
+RISK 3: SWIFT ISO 20022 deadline
+  If testing cycle not initiated by October 2025, risk of missing SWIFT mandate.
+  Mitigation: Payments team flagged for early start. SWIFT testing slot pre-booked September 2025.
+
+RISK 4: Engineer capacity
+  Q3 2025 has 5 simultaneous major initiatives. Engineering capacity is tight.
+  Mitigation: FRAUD-ENGINE GPU evaluation and service mesh PoC are lowest priority — can slip to Q4.
