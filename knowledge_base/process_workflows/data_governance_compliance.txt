@@ -1,0 +1,70 @@
+DOCUMENT: Data Governance and Compliance Framework
+TOPIC: Compliance, PCI-DSS, GDPR, Data Classification, Retention
+VERSION: 2.0
+LAST UPDATED: 2025-01-10
+OWNER: Compliance and Risk Team
+
+===========================
+REGULATORY FRAMEWORKS
+===========================
+
+PCI-DSS (Payment Card Industry Data Security Standard)
+  Scope: CBS, PAYMENTS-GW, SWIFT-ADAPTER
+  Requirements:
+    - No storage of CVV/CVC data after authorisation
+    - Cardholder data encrypted at rest (AES-256) and in transit (TLS 1.2+)
+    - Access restricted to need-to-know (RBAC enforced)
+    - CBS_SESSION_TIMEOUT_SEC minimum 900 seconds (PCI-DSS Req 8.6)
+  Annual assessment: Qualified Security Assessor (QSA) audit in Q3
+
+GDPR (General Data Protection Regulation)
+  Scope: All systems handling EU customer personal data
+  Requirements:
+    - Data minimisation
+    - Right to erasure: fulfilled within 30 days (submit ticket to Data Engineering)
+    - Data transfers outside EU require Standard Contractual Clauses (SCCs)
+    - Breach notification to regulators within 72 hours
+  DPO: dpo@company.com
+
+Basel III / Central Bank Reporting
+  Scope: REPORTING-SVC, DWH
+  Requirements:
+    - Liquidity Coverage Ratio (LCR): daily (RPT-001 job)
+    - Net Stable Funding Ratio (NSFR): monthly
+    - Submit to regulator within 1 business day of generation
+
+===========================
+DATA CLASSIFICATION
+===========================
+
+PUBLIC: No restriction. Marketing materials, public rate sheets.
+INTERNAL: Internal use only. Process docs, architecture diagrams. No external sharing.
+CONFIDENTIAL: Customer accounts, transactions, financial reports. Encrypted. RBAC enforced.
+RESTRICTED: Cardholder PAN, SWIFT keys, credentials, fraud model details.
+  - HSM-managed encryption keys. CISO approval for access. Immutable audit log.
+
+===========================
+DATA RETENTION
+===========================
+
+Transaction Records: 7 years (PCI-DSS + banking regulation)
+Customer KYC Documents: 5 years after account closure (AML)
+SWIFT Message Logs: 10 years
+Authentication Logs: 7 years
+Application Logs (non-compliance): 1 year
+Fraud Model Training Data: 3 years
+
+===========================
+GDPR ERASURE PROCESS
+===========================
+
+1. Customer submits erasure request via portal or in writing.
+2. DPO verifies identity and eligibility (no legal hold).
+3. Data Engineering executes deletion across CBS, DWH, backups within 30 days.
+4. Deletion confirmed in writing to customer.
+Note: Records under regulatory retention cannot be deleted. Customer is notified.
+
+CONTACTS:
+  DPO: dpo@company.com
+  Compliance Officer: compliance@company.com
+  PCI-DSS PM: pci-pm@company.com

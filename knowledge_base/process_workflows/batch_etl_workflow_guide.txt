@@ -1,0 +1,76 @@
+DOCUMENT: Batch Processing and ETL Workflow Guide
+TOPIC: Batch Jobs, ETL, Scheduling, Airflow
+VERSION: 2.3
+LAST UPDATED: 2024-12-01
+OWNER: Data Engineering Team
+
+===========================
+OVERVIEW
+===========================
+
+All scheduled batch jobs run during nightly processing window: 23:00-05:00.
+Orchestrated via Apache Airflow. Dashboard: http://10.10.50.30:8081 (MGMT-NET only).
+
+===========================
+NIGHTLY JOB SEQUENCE
+===========================
+
+JOB: EOD-001 — End of Day Reconciliation
+  Schedule: 23:00 daily
+  System: CBS
+  Duration: ~30 minutes
+  Purpose: Closes business day. Calculates interest accruals, updates balances, generates EOD snapshot.
+  Output: /data/exports/eod/YYYYMMDD_eod.csv
+  On Failure: Alert to cbs-ops@company.com. CBS locked for transactions until resolved.
+  Dependency: Must complete before ETL-001.
+
+JOB: ETL-001 — CBS to Data Warehouse Load
+  Schedule: 23:30 daily
+  System: Airflow DAG dag_cbs_to_dwh
+  Duration: ~60 minutes
+  Purpose: Extract CBS EOD snapshot, transform, load into Snowflake DWH.
+  Input: /data/exports/eod/YYYYMMDD_eod.csv
+  Output: DWH tables: fact_transactions, dim_accounts, dim_customers
+  On Failure: Auto-retry once. If second failure, page Data Engineering on-call.
+  Dependency: EOD-001 must complete.
+
+JOB: RPT-001 — Regulatory Reporting
+  Schedule: 01:00 daily
+  System: REPORTING-SVC
+  Duration: ~45 minutes
+  Purpose: Generate Basel III liquidity ratios, AML summary, transaction volume reports.
+  Output: /reports/regulatory/YYYYMMDD/
+  On Failure: Alert to bi-ops@company.com.
+  Dependency: ETL-001 must complete.
+
+JOB: FRAUD-RETRAIN-001 — Fraud Model Retraining
+  Schedule: First Sunday of each quarter, 02:00
+  System: Fraud Engine ML Pipeline
+  Duration: ~3 hours
+  Purpose: Retrain fraud model on last 90 days of labelled data.
+  Promotion criteria: Accuracy >95% on holdout set → promoted via Model Registry.
+
+JOB: ARCHIVE-001 — Data Archival
+  Schedule: 04:00 every Sunday
+  Duration: ~2 hours
+  Purpose: Archive transactions older than 7 years to cold storage (AWS Glacier).
+
+===========================
+JOB DEPENDENCY CHAIN
+===========================
+
+EOD-001 → ETL-001 → RPT-001
+                  ↓ (quarterly)
+             FRAUD-RETRAIN-001
+
+===========================
+FAILURE ESCALATION
+===========================
+
+EOD-001 failure → cbs-ops@company.com + CBS Manager (immediate)
+ETL-001 failure → Data Engineering on-call (PagerDuty: DE-ONCALL)
+RPT-001 failure → bi-ops@company.com
+Any job >2hr overrun → Platform Engineering auto-notified
+
+Airflow Dashboard: http://10.10.50.30:8081 (MGMT-NET only)
+Logs retained: 30 days at /var/log/airflow/

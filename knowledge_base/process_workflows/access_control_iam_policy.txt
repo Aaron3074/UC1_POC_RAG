@@ -1,0 +1,66 @@
+DOCUMENT: Access Control and IAM Policy
+TOPIC: Access Control, IAM, RBAC, Roles, Permissions
+VERSION: 2.1
+LAST UPDATED: 2025-02-01
+OWNER: Security Team
+
+===========================
+OVERVIEW
+===========================
+
+All application access managed via AUTH-SVC (Keycloak).
+No application should maintain its own user database.
+
+===========================
+ROLE DEFINITIONS
+===========================
+
+ROLE: analyst
+  Access: REPORTING-SVC (read), DWH (read, restricted tables)
+  Restricted: CBS direct DB, PAYMENTS-GW admin, FRAUD-ENGINE config
+
+ROLE: ops-user
+  Access: Airflow (monitor only), Zabbix (read), REPORTING-SVC (read), CBS (read)
+  Restricted: Production DB direct access, SSH to PROD-NET
+
+ROLE: payments-operator
+  Access: PAYMENTS-GW admin panel, CBS (read)
+  Restricted: Fraud Engine config, SWIFT audit logs (requires CISO approval)
+
+ROLE: sysadmin
+  Access: All systems
+  Restrictions: All actions logged to immutable audit trail. PAM required for production DB.
+
+ROLE: risk-analyst
+  Access: FRAUD-ENGINE (config read, model metrics), DWH (full), REPORTING-SVC
+  Restricted: Direct SWIFT logs, Customer PII (requires DPO approval)
+
+===========================
+PROVISIONING PROCESS
+===========================
+
+1. Manager submits access request via ServiceNow (ticket type: Access Request).
+2. Application owner approves within 2 business days.
+3. Security Team provisions role in Keycloak.
+4. User receives email. Access reviewed quarterly.
+
+PRIVILEGED ACCESS (sysadmin):
+  - Requires CISO approval + manager sign-off.
+  - Time-bound: maximum 90 days, then must renew.
+  - All sessions recorded via PAM tool.
+
+===========================
+OFFBOARDING
+===========================
+
+HR notifies Security Team on last working day.
+All accounts disabled within 4 hours.
+Accounts deleted within 30 days.
+
+===========================
+AUDIT AND COMPLIANCE
+===========================
+
+Access logs retained 7 years.
+Quarterly access review by each application owner.
+Annual SOC 2 audit includes access control review.
